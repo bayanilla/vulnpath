@@ -1,4 +1,6 @@
-# Vulnerability Investigation Workbench (POC)
+# VulnPath (POC)
+
+**Which vulnerable hosts are actually being targeted, and where an attacker could go next.** An offline tool that correlates raw network telemetry with Nessus scans.
 
 Point it at a folder of **raw** files: a Nessus scan plus whatever traffic you have (Zeek and/or Palo Alto). It reports:
 
@@ -17,8 +19,8 @@ Everything is a hypothesis with evidence attached. Nothing in the output claims 
 
 ## Run with the launcher window (no command line)
 
-- **Windows:** double-click `Run Workbench.bat`.
-- **Linux:** `./run_workbench.sh`. This needs the OS tkinter package: `python3-tk` on Debian/Ubuntu, or `python3-tkinter` on RHEL/Rocky.
+- **Windows:** double-click `Run VulnPath.bat`.
+- **Linux:** `./run_vulnpath.sh`. This needs the OS tkinter package: `python3-tk` on Debian/Ubuntu, or `python3-tkinter` on RHEL/Rocky.
 
 In the window, pick the case folder, set any options, and click **Run analysis**. Then click **Open report**. The launcher uses Python's built-in tkinter, so there is still nothing to pip install.
 

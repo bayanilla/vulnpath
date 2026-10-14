@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline vulnerability investigation workbench (POC).
+"""VulnPath: offline vulnerability and attack-path correlation (POC).
 
 Usage:
     python investigate.py --input ./case_folder --output ./results
@@ -11,8 +11,8 @@ from pathlib import Path
 if sys.version_info < (3, 9):
     sys.exit("Python 3.9 or newer is required.")
 
-from workbench.correlate import DEFAULT_INTERNAL, Settings  # noqa: E402
-from workbench.pipeline import DEFAULT_RULES, InputError, run  # noqa: E402
+from vulnpath.correlate import DEFAULT_INTERNAL, Settings  # noqa: E402
+from vulnpath.pipeline import DEFAULT_RULES, InputError, run  # noqa: E402
 
 
 def main(argv=None) -> int:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Point-and-click launcher for the workbench (standard-library tkinter, no installs).
+"""Point-and-click launcher for VulnPath (standard-library tkinter, no installs).
 
-Windows: double-click "Run Workbench.bat".  Linux: ./run_workbench.sh  (needs the python3-tk OS package).
+Windows: double-click "Run VulnPath.bat".  Linux: ./run_vulnpath.sh  (needs the python3-tk OS package).
 """
 import os
 import queue
@@ -21,8 +21,8 @@ except ImportError:  # pragma: no cover
              "(On Linux, install the OS package python3-tk / python3-tkinter to use the launcher.)")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from workbench.correlate import DEFAULT_INTERNAL, Settings  # noqa: E402
-from workbench.pipeline import InputError, run  # noqa: E402
+from vulnpath.correlate import DEFAULT_INTERNAL, Settings  # noqa: E402
+from vulnpath.pipeline import InputError, run  # noqa: E402
 
 PAD = {"padx": 8, "pady": 4}
 
@@ -39,7 +39,7 @@ def open_path(p: Path) -> None:
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Vulnerability Investigation Workbench")
+        self.title("VulnPath: vulnerability & attack-path correlation")
         self.minsize(760, 560)
         self.msgs: queue.Queue = queue.Queue()
         self.out_dir: Path | None = None

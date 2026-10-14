@@ -1,5 +1,5 @@
 @echo off
-rem Starts the workbench launcher window. Requires Python 3.9+ (the python.org installer includes tkinter).
+rem Starts the VulnPath launcher window. Requires Python 3.9+ (the python.org installer includes tkinter).
 cd /d "%~dp0"
 where pythonw >nul 2>nul
 if %errorlevel%==0 (
