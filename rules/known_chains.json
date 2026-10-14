@@ -1,0 +1,19 @@
+{
+  "_about": "Published exploit chains, matched by CVE against each host's Nessus results. Add new chains from advisories here; min_match is how many of the listed CVEs must be present on one host.",
+  "chains": [
+    {
+      "name": "ProxyShell (Microsoft Exchange)",
+      "cves": ["CVE-2021-34473", "CVE-2021-34523", "CVE-2021-31207"],
+      "min_match": 2,
+      "reference": "CISA alert AA21-321A; Microsoft Exchange security updates (2021)",
+      "description": "A pre-authentication path confusion, then privilege elevation in the Exchange PowerShell backend, then arbitrary file write, together give unauthenticated remote code execution."
+    },
+    {
+      "name": "ProxyLogon (Microsoft Exchange)",
+      "cves": ["CVE-2021-26855", "CVE-2021-27065", "CVE-2021-26857", "CVE-2021-26858"],
+      "min_match": 2,
+      "reference": "CISA emergency directive 21-02 (2021)",
+      "description": "A server-side request forgery bypasses authentication, then post-authentication arbitrary file write leads to code execution."
+    }
+  ]
+}
