@@ -67,11 +67,11 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
     e = escape
     F, P, C = ctx["findings"], ctx["paths"], ctx["chains"]
     est = [f for f in F if f["outcome"] == "established"]
-    h = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>Investigation Report</title>"
+    h = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>VulnPath Report</title>"
          f"<meta name='viewport' content='width=device-width,initial-scale=1'><style>{CSS}{UI_CSS}</style></head><body>",
-         f"<h1>Vulnerability and traffic correlation report</h1>",
+         f"<h1>VulnPath report: vulnerability and traffic correlation</h1>",
          f"<div class='muted'>Case folder: <code>{e(ctx['case'])}</code> · generated {e(ctx['generated'])} · "
-         f"workbench {e(ctx['version'])}</div>",
+         f"VulnPath {e(ctx['version'])}</div>",
          "<div class='box warn'><b>How to read this report.</b> Findings show traffic that reached services a "
          "Nessus scan reported as vulnerable. Attack paths and chains are <b>hypotheses</b> for an analyst to "
          "check. Nothing here confirms that a vulnerability was exploited.</div>",

@@ -12,14 +12,14 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "samples"))
 
 import make_demo_case  # noqa: E402
-from workbench.chains import stage  # noqa: E402
-from workbench.correlate import Settings  # noqa: E402
-from workbench.detect import detect  # noqa: E402
-from workbench.evidence import inventory, sha256_file  # noqa: E402
-from workbench.model import Vulnerability  # noqa: E402
-from workbench.parsers import nessus, paloalto, zeek  # noqa: E402
-from workbench.pipeline import InputError, run  # noqa: E402
-from workbench.report import write_csv  # noqa: E402
+from vulnpath.chains import stage  # noqa: E402
+from vulnpath.correlate import Settings  # noqa: E402
+from vulnpath.detect import detect  # noqa: E402
+from vulnpath.evidence import inventory, sha256_file  # noqa: E402
+from vulnpath.model import Vulnerability  # noqa: E402
+from vulnpath.parsers import nessus, paloalto, zeek  # noqa: E402
+from vulnpath.pipeline import InputError, run  # noqa: E402
+from vulnpath.report import write_csv  # noqa: E402
 
 
 THREAT_MAP = str(ROOT / "samples" / "demo_threat_map.csv")

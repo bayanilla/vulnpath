@@ -126,7 +126,7 @@ def run(case_dir: Path, out_dir: Path, settings: Settings | None = None,
     write_html(out_dir / "report.html", ctx, svg)
     write_csv(out_dir / "findings.csv", findings)
     write_json(out_dir / "findings.json", {
-        "generated": ctx["generated"], "workbench_version": __version__, "settings": {
+        "generated": ctx["generated"], "vulnpath_version": __version__, "settings": {
             "internal_networks": settings.internal_networks, "scanner_threshold": settings.scanner_threshold,
             "stale_days": settings.stale_days, "pan_utc_offset": settings.pan_utc_offset,
             "threat_map": settings.threat_map},
