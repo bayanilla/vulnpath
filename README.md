@@ -1,123 +1,190 @@
-# VulnPath (POC)
+# Múcaro | VulnPath
 
-**Which vulnerable hosts are actually being targeted, and where an attacker could go next.** An offline tool that correlates raw network telemetry with Nessus scans.
+**Which vulnerable hosts are actually being targeted, and where an attacker could go next.**
 
-Point it at a folder of **raw** files: a Nessus scan plus whatever traffic you have (Zeek and/or Palo Alto). It reports:
+VulnPath compares a Nessus vulnerability scan with the network traffic your sensors
+recorded. It shows which vulnerable services received traffic, whether that traffic
+was blocked, attempted or established, and how an attacker could move from one
+vulnerable host to the next. Analysts can then decide which hosts to examine first.
 
-- which vulnerable hosts were **targeted** on a vulnerable port, and whether the traffic was **established**, only **attempted**, **denied** by the firewall, or part of **scan-like probing**
-- **possible exploit attempts**, when a Palo Alto IPS signature fired against a vulnerable service, and whether the firewall blocked it
-- **candidate attack paths** across hosts, following observed connections in time order (for example external → web01 → app02)
-- **same-host vulnerability chains**, either a published chain matched by CVE (such as ProxyShell) or a generic one (an unauthenticated remote flaw plus a privilege-escalation or post-auth flaw on the same host)
+**AI-assisted proof of concept.** VulnPath is a local investigation aid for analysts.
+It reads raw files you already have: Nessus exports, Zeek connection logs and Palo
+Alto Networks Traffic and Threat logs. It never scans hosts, contacts the network or
+sends data anywhere. Its findings are leads to validate. They do not establish that a
+vulnerability was exploited or that a host is compromised.
 
-Everything is a hypothesis with evidence attached. Nothing in the output claims exploitation.
+## Contents
 
-## Requirements
+- [Start VulnPath](#start-vulnpath)
+- [Prepare a case folder](#prepare-a-case-folder)
+- [Review the report](#review-the-report)
+- [Interpret and validate the findings](#interpret-and-validate-the-findings)
+- [Save and share results](#save-and-share-results)
+- [Evidence handling and practical limits](#evidence-handling-and-practical-limits)
+- [Further documentation](#further-documentation)
 
-- Python 3.9 or newer. Tested on 3.11 and 3.13.
-- **No third-party packages.** It uses the standard library only, so there is nothing to `pip install` and nothing to vendor for an air-gapped network. Copy the folder and run it.
-- Windows, Linux or macOS.
+## Start VulnPath
 
-## Run with the launcher window (no command line)
+VulnPath needs Python 3.9 or later and nothing else. It uses only the Python standard
+library, so there is nothing to `pip install` and nothing to bundle for an air-gapped
+network. Copy the folder to the analyst workstation and run it.
 
-- **Windows:** double-click `Run VulnPath.bat`.
-- **Linux:** `./run_vulnpath.sh`. This needs the OS tkinter package: `python3-tk` on Debian/Ubuntu, or `python3-tkinter` on RHEL/Rocky.
+**With the launcher window**
 
-In the window, pick the case folder, set any options, and click **Run analysis**. Then click **Open report**. The launcher uses Python's built-in tkinter, so there is still nothing to pip install.
+- **Windows:** double-click `Run VulnPath.bat`. The python.org installer includes
+  everything the window needs.
+- **Linux:** run `./run_vulnpath.sh`. The window needs your distribution's tkinter
+  package: `python3-tk` on Debian or Ubuntu, `python3-tkinter` on RHEL or Rocky.
 
-## Interactive report
+Choose the case folder and a results folder, adjust **Options** if needed, and select
+**Run analysis**. When the run finishes, select **Open report**.
 
-`report.html` is still a single offline file, with no CDN and no server. In a browser, it lets you:
+**From the command line**
 
-- search across IPs, hostnames, CVEs and IPS signatures
-- filter by severity, activity, outcome, telemetry source and external-only, then sort any column
-- **click a host in the diagram** to focus the whole report on it. Its findings and paths stay, and everything else fades.
-- click a finding or attack path to highlight it in the diagram
-- download the currently filtered findings as CSV
-
-When printed, or opened with JavaScript disabled, it shows the full static report.
-
-## Run from the command line
-
-```
+```sh
 python investigate.py --input <case folder> --output <results folder>
 ```
 
-To try it on the bundled synthetic case:
+To try VulnPath without real data, run it on the bundled synthetic case:
 
-```
-python samples/make_demo_case.py          # (re)creates samples/case_demo
+```sh
 python investigate.py -i samples/case_demo -o demo_results --threat-map samples/demo_threat_map.csv
 ```
 
-Then open `demo_results/report.html` in any browser. It works offline: no CDN, and the diagram is inline SVG.
+Then open `demo_results/report.html` in a browser. The demo case contains fabricated
+hosts, addresses and plugin IDs. Its CVEs and CVSS vectors are real, so the scenarios
+behave realistically.
 
-| Option | Default | Meaning |
-|---|---|---|
-| `--internal CIDR ...` | RFC1918 | Your internal ranges. Anything outside them counts as external. |
-| `--scan-threshold N` | 20 | Distinct host:port pairs from one source before it counts as probing. |
-| `--stale-days N` | 30 | Flags findings where the scan and the traffic are more than N days apart. |
-| `--pan-utc-offset H` | 0 | Time zone of Palo Alto timestamps, in hours from UTC (e.g. `-5`). PAN-OS logs carry no zone. |
-| `--threat-map CSV` | none | `threat_id,cve` list so IPS signatures can be matched to Nessus CVEs. Without it, matching is by port. |
-| `--rules FILE` | `rules/known_chains.json` | List of published exploit chains. |
+| Option | Default | Use it to |
+| --- | --- | --- |
+| `--internal CIDR ...` | RFC 1918 ranges | Name your internal networks. Other sources are treated as external. |
+| `--pan-utc-offset HOURS` | `0` | Set the time zone of Palo Alto timestamps, for example `-5`. PAN-OS logs carry no zone. |
+| `--threat-map CSV` | none | Supply a `threat_id,cve` list so IPS signatures can be matched to Nessus CVEs. |
+| `--stale-days N` | `30` | Flag findings where the scan and the traffic are more than N days apart. |
+| `--scan-threshold N` | `20` | Set how many distinct host:port pairs one source must contact to count as probing. |
+| `--rules FILE` | `rules/known_chains.json` | Use a different list of published exploit chains. |
 
-## Supported inputs
+The launcher window offers the same options.
 
-Files are detected by **content**, not by name.
+## Prepare a case folder
 
-| Source | Format | Status |
-|---|---|---|
-| Nessus | `.nessus` v2 XML | Supported (required for vulnerability correlation) |
-| Zeek | `conn.log` TSV or JSON, plain or `.gz` | Supported |
-| Palo Alto | Traffic and Threat logs: Web UI/Panorama CSV export (header row), or raw syslog CSV from a collector (with or without the `<PRI>` prefix, mixed log types OK) | Supported. SYSTEM/CONFIG and other log types are counted and skipped. CEF/LEEF from a SIEM is not supported yet. |
-| Cortex Xpanse | CSV/JSON export | After Palo Alto. Adds "exposed to the internet" context, not traffic. |
+Put the original vendor exports in one folder. Subfolders are fine. Do not convert,
+trim or re-save the files; VulnPath reads them as exported and identifies each file by
+its content, not its name.
 
-Unsupported files are listed in the report and skipped. Originals are opened read-only, hashed with SHA-256 before and after the run, and never written to. The output folder must be outside the case folder.
+| Source | What to export | Role |
+| --- | --- | --- |
+| Nessus | `.nessus` (v2 XML) | **Required.** The list of vulnerable hosts and services. |
+| Zeek | `conn.log`, TSV or JSON, plain or `.gz` | Observed connections. |
+| Palo Alto | Traffic and Threat logs, as a web UI or Panorama CSV export, or raw syslog lines from a collector | Observed connections, firewall decisions, NAT and IPS detections. |
 
-## Outputs
+Provide Nessus plus at least one traffic source. Zeek and Palo Alto can be used
+together. Palo Alto SYSTEM, CONFIG and other log types can stay in the folder; they are
+counted and skipped. Files VulnPath does not recognise are listed in the report, not
+silently ignored.
+
+**Start small.** A day of traffic and the matching scan is enough to check that the
+results make sense before running a larger case.
+
+## Review the report
+
+`report.html` is a single file that works offline. It needs no server and loads
+nothing from the internet.
+
+1. Read the **Summary** for the number of findings, established connections to
+   vulnerable services, unblocked IPS detections, attack paths and chains. Check the
+   notices beneath it; they say when a source is missing.
+2. Use the **Attack-path diagram** to see how traffic reaches vulnerable hosts. Solid
+   purple lines are hops on a candidate attack path, red lines are IPS detections, and
+   dashed or dotted lines are attempts, probing or firewall denies. A red **CHAIN**
+   badge marks a host with a same-host vulnerability chain. **Select a host** to focus
+   the whole report on it; select it again to clear the focus.
+3. Work through **Findings**, which are ranked by priority score. Search by IP,
+   hostname, CVE or signature, filter by severity, activity, outcome or sensor, and
+   sort any column. Select a row to highlight it in the diagram. Expand **why /
+   evidence** to see how the score was built and which log lines support it.
+4. Review **Candidate attack paths**: each hop lists the observed connection, its time
+   range and the vulnerabilities on the target.
+5. Review **Same-host vulnerability chains**: a published chain matched by CVE, such as
+   ProxyShell, or an inferred chain of a remote entry flaw plus a privilege-escalation
+   or post-authentication flaw on the same host.
+6. Check **Coverage and data quality** for scanned hosts with no traffic, traffic to
+   unscanned hosts, stale scans, skipped files and malformed lines.
+
+## Interpret and validate the findings
+
+Treat each finding as a precise question for the asset owner or incident responder:
+
+> Traffic from this source reached this service, which the scan reports as vulnerable,
+> at these times. Was the service patched or protected, and do the host's own logs show
+> anything after that connection?
+
+**Worked example:** in the demo case, an external address made established HTTPS
+connections to web01, and an IPS signature for the same CVE that Nessus reported fired
+without being blocked. web01 then connected to app02 over SMB, where Nessus reports
+MS17-010. Give the responder the finding IDs, the time range and the evidence lines.
+They can check web01's web-server and endpoint logs from that window and then decide
+whether app02 needs the same review.
+
+What the activity labels mean:
+
+| Label | Meaning | What it does not mean |
+| --- | --- | --- |
+| **exploit-attempt** | An IPS vulnerability signature fired against the vulnerable service. | It does not mean the exploit succeeded, even when not blocked. |
+| **targeting**, established | A session completed with the vulnerable service. | A completed connection is reachability, not exploitation. |
+| **targeting**, attempted | Connections were tried but no session completed. | |
+| **denied** | The firewall refused the connections. | |
+| **probing** | The source contacted many hosts and ports, or the firewall flagged a scan. | Probing is broad and is not aimed at this service in particular. |
+
+A **candidate attack path** follows established connections, or unblocked IPS
+detections, into vulnerable services in time order. It shows where an attacker *could*
+have gone. It does not show that anyone did. An **inferred chain** is based on each
+vulnerability's access requirements from its CVSS vector; VulnPath does not verify that
+the first flaw gives the access the second one needs. A **published chain** carries
+more weight because the combination is documented.
+
+A **stale scan** warning means the scan and the traffic are far apart in time, so the
+host may have been patched or changed. Unfamiliar results warrant validation, not an
+automatic incident declaration or blocking decision.
+
+## Save and share results
+
+Each run writes these files to the results folder:
 
 | File | Contents |
-|---|---|
-| `report.html` | Summary, diagram, attack paths, chains, findings, coverage, evidence manifest, limitations |
-| `attack_paths.svg` | The diagram on its own, for slides |
-| `findings.csv` | One row per source → vulnerable service. Opens in Excel. |
-| `findings.json` | Findings, attack paths and chains, with evidence and scoring reasons |
-| `evidence_manifest.json` | Every input file with its SHA-256, detected type, parser and record counts |
-| `data_quality.json` | Malformed lines, skipped files, coverage gaps, processing log |
+| --- | --- |
+| `report.html` | The interactive report. Print it or save it as PDF from the browser for a static copy. |
+| `attack_paths.svg` | The diagram on its own, for slides and documents. |
+| `findings.csv` | One row per source and vulnerable service. Opens in Excel. |
+| `findings.json` | Findings, attack paths and chains with evidence and scoring reasons, for other tools. |
+| `evidence_manifest.json` | Every input file with its SHA-256 hash, detected type, parser version and record counts. |
+| `data_quality.json` | Coverage gaps, skipped files, malformed lines and the processing log. |
 
-Every finding points back to `file [sha256 prefix] line N uid ...` and to the Nessus `ReportHost / plugin / port`.
+In the report, **Download CSV (filtered)** saves only the findings that match the
+current search and filters.
 
-## How decisions are made
+Every finding cites its evidence as `file [hash prefix] line N` together with the Nessus
+`ReportHost / plugin / port`, so a reviewer can go back to the original record.
 
-All rules are deterministic, with no AI in the analysis.
+## Evidence handling and practical limits
 
-- **Match:** traffic destination IP + port + protocol equals a Nessus result. Host-level results (port 0, such as local privilege escalation) are never matched to traffic. They are used only for chaining.
-- **Outcome (Zeek `conn_state`):** SF/S1/S2/S3/RSTO/RSTR count as established. S0/REJ/SH/... count as attempted.
-- **Outcome (Palo Alto Traffic):** `allow` with bytes received counts as established. `allow` with no reply counts as attempted. deny/drop/reset counts as denied.
-- **Palo Alto NAT:** when a NAT destination is logged, matching uses the translated (internal) address the scanner saw. The public address is kept as "via NAT".
-- **Palo Alto Threat:** a `vulnerability`-type detection on a vulnerable service is a possible exploit attempt. `alert`/`allow` means not blocked. Anything else means blocked. A `scan` detection counts as probing. A CVE match comes from the threat map or from a CVE in the signature text.
-- **Probing:** the source touched at least `--scan-threshold` distinct host:port pairs.
-- **Attack path:** follows only *established* connections or *unblocked* IPS detections into vulnerable services. A hop X → Y counts only if it happened at or after the time X was first reached. Depth is capped at 4 and the number of paths at 50.
-- **Vulnerability stage:** taken from the CVSS vector. AV:N with PR:N is a remote, no-credential entry point. AV:N with PR:L/H needs a foothold. AV:L is local, i.e. privilege escalation.
-- **Priority score:** severity, established traffic, external source, public exploit, being a hop on an attack path, and having a same-host chain all add points. Scan-like probing and a stale scan subtract. Each finding lists its reasons.
+| Consideration | What to expect |
+| --- | --- |
+| Original files | Opened read-only, hashed with SHA-256 before and after the run, and never modified. The results folder must be outside the case folder. Hashing supports integrity checks; it is not by itself a complete chain of custody. |
+| Network use | None. VulnPath makes no network connections and the report loads nothing from the internet. |
+| Host identity | Hosts are matched by IP address. Palo Alto inbound NAT is resolved to the internal address Nessus scanned. DHCP changes and overlapping address ranges are not resolved. |
+| Time zones | Zeek timestamps are UTC. Palo Alto timestamps have no zone and are read with `--pan-utc-offset`; a wrong offset can reorder attack-path hops. |
+| Overlapping sensors | When Zeek and the firewall see the same sessions, counts are not added together. The report shows the larger single-sensor count and a per-sensor breakdown. |
+| Palo Alto formats | Syslog lines are read by documented PAN-OS field position. Check a sample line from each of your collection points. CEF and LEEF from a SIEM are not supported yet. |
+| IPS to CVE matching | Threat logs carry a Threat ID, not a CVE. Without `--threat-map`, IPS detections are matched to vulnerabilities by port only. |
+| Size | Logs are streamed line by line, so memory grows with the number of source-to-vulnerable-service pairs, not with log size. Large cases have not been benchmarked yet. The diagram shows at most 40 hosts, and attack paths are capped at 4 hops and 50 paths. |
+| Not yet supported | Xpanse exposure data, Zeek logs other than `conn.log`, and CEF/LEEF input. |
 
-## Adding a published chain
+Review sensitive inputs before sharing a report. VulnPath does not encrypt its output,
+and reports contain internal addresses, hostnames and vulnerability details.
 
-Add an entry to `rules/known_chains.json` with the CVEs from the advisory and `min_match` (how many of them must be present on one host).
+## Further documentation
 
-## Tests
-
-```
-python -m unittest discover -s tests -v
-```
-
-35 tests cover parsing, content-based detection, gzip input, DTD rejection, evidence integrity, and these negative cases: a vulnerability on a different port, attempts that never connected, connections in the wrong time order, a stale scan, and missing traffic. They also cover the Palo Alto cases: syslog and header-CSV detection, NAT, blocked and unblocked IPS detections, the time-zone offset, and runs with Palo Alto only. Under Python 3.11 and 3.13, all 35 pass.
-
-## Known limitations (POC)
-
-- Hosts are matched by IP. Palo Alto inbound NAT is handled, but DHCP changes and overlapping address ranges are not.
-- Palo Alto syslog fields are read by documented PAN-OS position (fields 0-46). This should be checked against a sample from your firewalls.
-- Threat logs carry a Threat ID, not a CVE. Without a threat map, IPS detections are matched to vulnerabilities by port only.
-- Chains are inferred from CVSS and the rules file. Whether one flaw really grants the access the next one needs has not been verified.
-- When Zeek and the firewall both see the same sessions, counts are not added together. The report shows the largest single-sensor count, plus a per-sensor breakdown.
-- Only Zeek `conn.log` is used. `http`, `ssl` and `notice` logs could later add payload-level evidence.
-- The demo data is synthetic. The CVEs and CVSS vectors are real, but the IPs, hosts and plugin IDs are made up.
+- [Methods and decision rules](METHODS.md): how traffic is classified, matched and
+  scored, how paths and chains are built, and how to add a published chain.
+- [Development and verification](DEVELOPMENT.md): code layout, tests and the demo case.
