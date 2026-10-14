@@ -1,0 +1,9 @@
+Receive Time,Serial #,Type,Threat/Content Type,Generate Time,Source address,Destination address,NAT Source IP,NAT Destination IP,Rule,Application,Source Zone,Destination Zone,Session ID,Source Port,Destination Port,NAT Source Port,NAT Destination Port,IP Protocol,Action,Bytes,Bytes Sent,Bytes Received,Session End Reason
+2026/10/10 07:00:00,013201000123,TRAFFIC,end,2026/10/10 07:00:00,203.0.113.90,198.18.10.30,0.0.0.0,10.0.1.30,deny-ajp,incomplete,untrust,dmz,73000,40000,8009,0,8009,tcp,deny,74,74,0,policy-deny
+2026/10/10 07:00:30,013201000123,TRAFFIC,end,2026/10/10 07:00:30,203.0.113.90,198.18.10.30,0.0.0.0,10.0.1.30,deny-ajp,incomplete,untrust,dmz,73001,40000,8009,0,8009,tcp,deny,74,74,0,policy-deny
+2026/10/10 07:01:00,013201000123,TRAFFIC,end,2026/10/10 07:01:00,203.0.113.90,198.18.10.30,0.0.0.0,10.0.1.30,deny-ajp,incomplete,untrust,dmz,73002,40000,8009,0,8009,tcp,deny,74,74,0,policy-deny
+2026/10/10 08:00:00,013201000123,TRAFFIC,end,2026/10/10 08:00:00,192.0.2.25,198.18.10.30,0.0.0.0,10.0.1.30,inbound-dmz,ssl,untrust,dmz,74000,41000,443,0,443,tcp,allow,9000,1200,7800,tcp-fin
+2026/10/10 08:00:30,013201000123,TRAFFIC,end,2026/10/10 08:00:30,192.0.2.25,198.18.10.30,0.0.0.0,10.0.1.30,inbound-dmz,ssl,untrust,dmz,74001,41000,443,0,443,tcp,allow,9000,1200,7800,tcp-fin
+2026/10/10 08:01:00,013201000123,TRAFFIC,end,2026/10/10 08:01:00,192.0.2.25,198.18.10.30,0.0.0.0,10.0.1.30,inbound-dmz,ssl,untrust,dmz,74002,41000,443,0,443,tcp,allow,9000,1200,7800,tcp-fin
+2026/10/10 08:01:30,013201000123,TRAFFIC,end,2026/10/10 08:01:30,192.0.2.25,198.18.10.30,0.0.0.0,10.0.1.30,inbound-dmz,ssl,untrust,dmz,74003,41000,443,0,443,tcp,allow,9000,1200,7800,tcp-fin
+2026/10/10 08:02:00,013201000123,TRAFFIC,end,2026/10/10 08:02:00,192.0.2.25,198.18.10.30,0.0.0.0,10.0.1.30,inbound-dmz,ssl,untrust,dmz,74004,41000,443,0,443,tcp,allow,9000,1200,7800,tcp-fin
