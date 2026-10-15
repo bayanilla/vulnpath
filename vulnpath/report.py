@@ -373,8 +373,9 @@ def _select(id_, label, options) -> str:
 UI_CSS = """
 .js-only{display:none}.js .js-only{display:block}.js .toolbar.js-only{display:flex}
 .js .theme-picker.js-only{display:flex}
-.titlebar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
-.theme-picker{gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.titlebar{display:flex;gap:16px;align-items:flex-start;justify-content:space-between}
+.titlebar h1{margin-top:0}
+.theme-picker{flex:none;margin-left:auto;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 .toolbar{position:sticky;top:0;z-index:5;background:var(--bg);flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
 .toolbar input[type=search]{flex:1 1 240px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text)}
 .toolbar select,.toolbar button,.theme-picker select{padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
