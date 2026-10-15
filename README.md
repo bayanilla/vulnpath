@@ -37,6 +37,11 @@ network. Copy the folder to the analyst workstation and run it.
   everything the window needs.
 - **Linux:** run `./run_vulnpath.sh`. The window needs your distribution's tkinter
   package: `python3-tk` on Debian or Ubuntu, `python3-tkinter` on RHEL or Rocky.
+  To add VulnPath to the application menu with its icon, run `./install_linux_shortcut.sh`
+  once (per user, no root).
+- **macOS:** run `./run_vulnpath.sh`. The python.org installer includes tkinter.
+
+The window, taskbar and Dock show the Múcaro M icon from `assets/`.
 
 Choose the case folder and a results folder, adjust **Options** if needed, and select
 **Run analysis**. When the run finishes, select **Open report**.

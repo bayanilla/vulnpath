@@ -6,6 +6,7 @@
 | --- | --- |
 | `investigate.py` | Command-line entry point. |
 | `launcher.py` | tkinter launcher window. `Run VulnPath.bat` and `run_vulnpath.sh` start it. |
+| `assets/` | Múcaro M app icon: `mucaro-mark.svg` (source, same as Pathfinder), PNGs for Tk and `vulnpath.ico` for Windows. `install_linux_shortcut.sh` adds a Linux menu entry that uses it. |
 | `vulnpath/evidence.py` | Finds and hashes input files, and re-checks the hashes after the run. |
 | `vulnpath/detect.py` | Identifies each file's source type from its content. |
 | `vulnpath/parsers/` | One streaming parser per source: `nessus.py`, `zeek.py` (conn, ssh, ntlm, kerberos), `paloalto.py`. |
