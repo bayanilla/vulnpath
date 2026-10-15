@@ -137,6 +137,11 @@ def _theme_css() -> str:
 
 THEME_IDS = [t[0] for t in THEMES]
 THEME_KEY = "vulnpath-report-theme"
+# Múcaro M mark (same as Pathfinder and the BGP lookup), inlined so the report stays one file.
+FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E"
+           "%3Crect width='64' height='64' rx='14' fill='%23141a1c'/%3E%3Cpath fill='%23c9dddd' "
+           "d='M12 48V16h10l10 16 10-16h10v32H42V31l-7 12h-6l-7-12v17H12z'/%3E%3C/svg%3E")
+
 # Runs in <head> so a saved theme applies before the page is painted.
 THEME_BOOT = ("(function(){try{var t=localStorage.getItem('%s');if(%s.indexOf(t)>0)"
               "document.documentElement.setAttribute('data-theme',t)}catch(e){}})();"
@@ -170,6 +175,7 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
     F, S, P, C = ctx["findings"], ctx["hostile_sources"], ctx["paths"], ctx["chains"]
     live_src = [x for x in S if not x["routine_only"]]
     h = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>VulnPath Report</title>"
+         f"<link rel='icon' type='image/svg+xml' href=\"{FAVICON}\">"
          f"<meta name='viewport' content='width=device-width,initial-scale=1'><script>{THEME_BOOT}</script>"
          f"<style>{_theme_css()}{CSS}{UI_CSS}</style></head><body>",
          "<div class='titlebar'><h1>VulnPath report: which vulnerable services are being targeted</h1>"

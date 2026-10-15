@@ -25,6 +25,7 @@ from vulnpath.correlate import DEFAULT_INTERNAL, Settings  # noqa: E402
 from vulnpath.pipeline import InputError, run  # noqa: E402
 
 PAD = {"padx": 8, "pady": 4}
+ASSETS = Path(__file__).resolve().parent / "assets"
 
 
 def open_path(p: Path) -> None:
@@ -36,10 +37,22 @@ def open_path(p: Path) -> None:
         subprocess.Popen(["xdg-open", str(p)])
 
 
+def set_app_id() -> None:
+    """Windows groups the taskbar button under pythonw.exe unless the process has its own app ID."""
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Mucaro.VulnPath")
+        except (AttributeError, OSError):
+            pass
+
+
 class Launcher(tk.Tk):
     def __init__(self):
-        super().__init__()
+        # className sets WM_CLASS on Linux so a desktop entry (install_linux_shortcut.sh) can match the window.
+        super().__init__(className="VulnPath")
         self.title("VulnPath: which vulnerable services are being targeted")
+        self._set_icon()
         self.minsize(760, 560)
         self.msgs: queue.Queue = queue.Queue()
         self.out_dir: Path | None = None
@@ -108,6 +121,16 @@ class Launcher(tk.Tk):
         self.log.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
         self.after(100, self._drain)
+
+    def _set_icon(self) -> None:
+        """Múcaro M as the window, taskbar and macOS Dock icon. Skipped quietly if Tk cannot read it."""
+        try:
+            self._icons = [tk.PhotoImage(file=str(ASSETS / f"vulnpath-{n}.png")) for n in (256, 32)]
+            self.iconphoto(True, *self._icons)
+            if sys.platform.startswith("win"):
+                self.iconbitmap(default=str(ASSETS / "vulnpath.ico"))
+        except tk.TclError:
+            pass
 
     def _row(self, parent, r, label, var, cmd):
         ttk.Label(parent, text=label).grid(row=r, column=0, sticky="w", **PAD)
@@ -222,4 +245,5 @@ class Launcher(tk.Tk):
 
 
 if __name__ == "__main__":
+    set_app_id()
     Launcher().mainloop()
