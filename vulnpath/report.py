@@ -66,17 +66,89 @@ def write_sources_csv(path: Path, sources: list[dict]) -> None:
 
 
 CSS = """
-body{font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#111827;max-width:1200px;margin:24px auto;padding:0 16px;line-height:1.45}
-h1{font-size:24px;margin-bottom:4px}h2{font-size:18px;margin-top:32px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}
-.muted{color:#6b7280}.box{border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin:10px 0}
-.warn{background:#fff7ed;border-color:#fdba74}.kpi{display:inline-block;margin:0 24px 8px 0}.kpi b{font-size:22px;display:block}
-table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #e5e7eb;padding:6px 8px;text-align:left;vertical-align:top}
-th{background:#f9fafb}code{font-size:12px;background:#f3f4f6;padding:1px 4px;border-radius:4px;word-break:break-all}
-.sev-Critical{color:#b91c1c;font-weight:600}.sev-High{color:#ea580c;font-weight:600}.sev-Medium{color:#ca8a04}.sev-Low{color:#2563eb}
-.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:9px;background:#eef2ff;color:#3730a3;margin-right:4px}
-.tag.hot{background:#fee2e2;color:#991b1b}.tag.cred{background:#ffedd5;color:#9a3412}.tag.scan{background:#f3f4f6;color:#374151}
-.svgwrap{overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px}details{margin:4px 0}
+body{font-family:Segoe UI,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);max-width:1200px;margin:24px auto;padding:0 16px;line-height:1.45}
+h1{font-size:24px;margin-bottom:4px}h2{font-size:18px;margin-top:32px;border-bottom:1px solid var(--border);padding-bottom:4px}
+a{color:var(--accent)}
+.muted{color:var(--muted)}.box{border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:10px 0}
+.warn{background:var(--warn-bg);border-color:var(--warn-border)}.kpi{display:inline-block;margin:0 24px 8px 0}.kpi b{font-size:22px;display:block}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:var(--surface)}code{font-size:12px;background:var(--raised);padding:1px 4px;border-radius:4px;word-break:break-all}
+.sev-Critical{color:var(--sev-crit);font-weight:600}.sev-High{color:var(--sev-high);font-weight:600}.sev-Medium{color:var(--sev-med)}.sev-Low{color:var(--sev-low)}
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:9px;background:var(--tag-bg);color:var(--tag-fg);margin-right:4px}
+.tag.hot{background:var(--hot-bg);color:var(--hot-fg)}.tag.cred{background:var(--cred-bg);color:var(--cred-fg)}.tag.scan{background:var(--scan-bg);color:var(--scan-fg)}
+.svgwrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px}details{margin:4px 0}
 """
+
+# Report themes. "classic" is the original light report; the rest are the Múcaro themes used by
+# Pathfinder and the BGP Routing Exposure Lookup, so the tools look alike side by side.
+CLASSIC = {"scheme": "light", "bg": "#ffffff", "surface": "#f9fafb", "raised": "#f3f4f6", "hover": "#f9fafb",
+           "border": "#e5e7eb", "border-strong": "#d1d5db", "text": "#111827", "text-2": "#4b5563",
+           "muted": "#6b7280", "accent": "#7c3aed", "sel": "#f5f3ff", "focus-ring": "#ddd6fe",
+           "warn-bg": "#fff7ed", "warn-border": "#fdba74", "chip-bg": "#ede9fe", "chip-fg": "#5b21b6",
+           "tag-bg": "#eef2ff", "tag-fg": "#3730a3", "hot-bg": "#fee2e2", "hot-fg": "#991b1b",
+           "cred-bg": "#ffedd5", "cred-fg": "#9a3412", "scan-bg": "#f3f4f6", "scan-fg": "#374151",
+           "node": "#ffffff", "node-src": "#f1f5f9", "sev-crit": "#b91c1c", "sev-high": "#ea580c",
+           "sev-med": "#ca8a04", "sev-low": "#2563eb", "sev-none": "#475569"}
+_DARK_SEV = {"sev-high": "#ff9f5a", "sev-low": "#8ab4f8"}
+# id, label, scheme, bg, surface, raised, hover, border, border-strong, text, muted, accent, warning, danger, extra
+MUCARO = [
+    ("soc", "SOC Dark", "dark", "#101415", "#141a1c", "#252e30", "#354246", "#333c3e", "#435053", "#e9eeee",
+     "#9eafb1", "#b8c4c7", "#efd384", "#ffb7ae", _DARK_SEV),
+    ("nord", "Nord Calm", "dark", "#2e3440", "#3b4252", "#434c5e", "#4c566a", "#4c566a", "#5b667a", "#eceff4",
+     "#b4bfce", "#88c0d0", "#ebcb8b", "#e0868e", _DARK_SEV),
+    ("contrast", "High Contrast", "dark", "#000000", "#080808", "#171717", "#303030", "#777777", "#aaaaaa",
+     "#ffffff", "#d0d0d0", "#62bfb0", "#ffdf00", "#ff8f8f", {"sev-high": "#ffb070", "sev-low": "#9cc8ff"}),
+    ("matrix", "Matrix", "dark", "#030805", "#07120a", "#0d1f11", "#15351c", "#24532d", "#347a40", "#d9ffe0",
+     "#83b98c", "#24f06b", "#c7ff47", "#ff8270", _DARK_SEV),
+    ("mucaro", "Mucaro Dusk", "dark", "#102333", "#142d3e", "#1c3a4d", "#294c60", "#36596c", "#4c7183", "#f1f5ef",
+     "#9fbab3", "#42d6bd", "#f4bd61", "#f18a7b", _DARK_SEV),
+    ("notebook", "Field Notebook", "light", "#f3eee3", "#fffaf0", "#ebe1cc", "#dfd0b6", "#9a8b72", "#766850",
+     "#1f2b30", "#68797a", "#006d77", "#a15c00", "#9b302a", {"sev-high": "#c2410c", "sev-med": "#8a6a00",
+                                                           "sev-low": "#1d4ed8"}),
+    ("amber", "Terminal Amber", "dark", "#0d0a04", "#151006", "#241b0a", "#382a0c", "#664a14", "#8f681d", "#ffe9b0",
+     "#bda265", "#ffb000", "#ffe075", "#ff9370", _DARK_SEV),
+]
+
+
+def _mucaro_vars(scheme, bg, surface, raised, hover, border, strong, text, muted, accent, warning, danger, extra):
+    v = {"scheme": scheme, "bg": bg, "surface": surface, "raised": raised, "hover": hover, "border": border,
+         "border-strong": strong, "text": text, "text-2": muted, "muted": muted, "accent": accent, "sel": hover,
+         "focus-ring": accent, "warn-bg": raised, "warn-border": warning, "chip-bg": raised, "chip-fg": accent,
+         "tag-bg": raised, "tag-fg": text, "hot-bg": raised, "hot-fg": danger, "cred-bg": raised,
+         "cred-fg": warning, "scan-bg": raised, "scan-fg": muted, "node": surface, "node-src": raised,
+         "sev-crit": danger, "sev-med": warning, "sev-none": muted}
+    v.update(extra)
+    return v
+
+
+THEMES = [("classic", "Classic Light", CLASSIC)] + [(t[0], t[1], _mucaro_vars(*t[2:])) for t in MUCARO]
+
+
+def _theme_css() -> str:
+    def block(sel, v):
+        body = ";".join(f"--{k}:{val}" for k, val in v.items() if k != "scheme")
+        return f"{sel}{{color-scheme:{v['scheme']};{body}}}"
+    out = [block(":root", CLASSIC)]
+    out += [block(f":root[data-theme='{tid}']", v) for tid, _, v in THEMES[1:]]
+    # Printed reports always use the light layout.
+    out.append("@media print{" + block(":root[data-theme]", CLASSIC) + "}")
+    return "\n".join(out) + "\n"
+
+
+THEME_IDS = [t[0] for t in THEMES]
+THEME_KEY = "vulnpath-report-theme"
+# Runs in <head> so a saved theme applies before the page is painted.
+THEME_BOOT = ("(function(){try{var t=localStorage.getItem('%s');if(%s.indexOf(t)>0)"
+              "document.documentElement.setAttribute('data-theme',t)}catch(e){}})();"
+              % (THEME_KEY, json.dumps(THEME_IDS)))
+
+
+def _theme_picker() -> str:
+    mucaro = "".join(f"<option value='{tid}'>{escape(label)}</option>" for tid, label, _ in THEMES[1:])
+    return ("<label class='theme-picker js-only' for='theme'>Theme <select id='theme' "
+            "title='Saved only in this browser'><option value='classic'>Classic Light</option>"
+            f"<optgroup label='Múcaro'>{mucaro}</optgroup></select></label>")
+
 
 MAX_HTML_FINDINGS = 1000
 MAX_HTML_SOURCES = 500
@@ -98,8 +170,10 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
     F, S, P, C = ctx["findings"], ctx["hostile_sources"], ctx["paths"], ctx["chains"]
     live_src = [x for x in S if not x["routine_only"]]
     h = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>VulnPath Report</title>"
-         f"<meta name='viewport' content='width=device-width,initial-scale=1'><style>{CSS}{UI_CSS}</style></head><body>",
-         "<h1>VulnPath report: which vulnerable services are being targeted</h1>",
+         f"<meta name='viewport' content='width=device-width,initial-scale=1'><script>{THEME_BOOT}</script>"
+         f"<style>{_theme_css()}{CSS}{UI_CSS}</style></head><body>",
+         "<div class='titlebar'><h1>VulnPath report: which vulnerable services are being targeted</h1>"
+         + _theme_picker() + "</div>",
          f"<div class='muted'>Case folder: <code>{e(ctx['case'])}</code> · generated {e(ctx['generated'])} · "
          f"VulnPath {e(ctx['version'])}</div>",
          "<div class='box warn'><b>How to read this report.</b> VulnPath first looks for hostile behaviour in the "
@@ -287,7 +361,7 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
              "that one flaw provides the access the next one needs.</li>"
              "<li>Host-level vulnerabilities (port 0) are used only for chaining, never matched to traffic.</li>"
              "</ul>")
-    h.append(f"<script>{UI_JS}</script></body></html>")
+    h.append(f"<script>{UI_JS.replace('%THEME_KEY%', THEME_KEY)}</script></body></html>")
     path.write_text("\n".join(h), encoding="utf-8")
 
 
@@ -298,15 +372,25 @@ def _select(id_, label, options) -> str:
 
 UI_CSS = """
 .js-only{display:none}.js .js-only{display:block}.js .toolbar.js-only{display:flex}
-.toolbar{position:sticky;top:0;z-index:5;background:#fff;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb}
-.toolbar input[type=search]{flex:1 1 240px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px}
-.toolbar select,.toolbar button{padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font:inherit;font-size:13px}
+.js .theme-picker.js-only{display:flex}
+.titlebar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.theme-picker{gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.toolbar{position:sticky;top:0;z-index:5;background:var(--bg);flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.toolbar input[type=search]{flex:1 1 240px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text)}
+.toolbar select,.toolbar button,.theme-picker select{padding:5px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
 .toolbar button{cursor:pointer}.toolbar label{font-size:13px}
-.chip{background:#ede9fe;color:#5b21b6;border-radius:12px;padding:3px 10px;font-size:13px;cursor:pointer}
-th[data-k]{cursor:pointer;user-select:none}th[data-k]:after{content:' \\2195';color:#9ca3af;font-size:11px}
-th.asc:after{content:' \\2191';color:#111827}th.desc:after{content:' \\2193';color:#111827}
-tr.frow{cursor:pointer}tr.frow:hover{background:#f9fafb}tr.sel{background:#f5f3ff!important}
-.pathbox,.chainbox{cursor:pointer}.pathbox.sel,.chainbox.sel{border-color:#7c3aed;box-shadow:0 0 0 2px #ddd6fe}
+.chip{background:var(--chip-bg);color:var(--chip-fg);border-radius:12px;padding:3px 10px;font-size:13px;cursor:pointer}
+th[data-k]{cursor:pointer;user-select:none}th[data-k]:after{content:' \\2195';color:var(--muted);font-size:11px}
+th.asc:after{content:' \\2191';color:var(--text)}th.desc:after{content:' \\2193';color:var(--text)}
+tr.frow{cursor:pointer}tr.frow:hover{background:var(--hover)}tr.sel{background:var(--sel)!important}
+.pathbox,.chainbox{cursor:pointer}.pathbox.sel,.chainbox.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--focus-ring)}
+#diagram .bg{fill:var(--bg)}#diagram .ink{fill:var(--text)}#diagram .ink2{fill:var(--text-2)}#diagram .ink3{fill:var(--muted)}
+#diagram path.ink,#diagram line.ink{fill:none;stroke:var(--text)}#diagram .halo{stroke:var(--bg)}
+#diagram .box{fill:var(--node)}#diagram .box.src{fill:var(--node-src);stroke:var(--sev-none)}
+#diagram [data-sev=Critical] .box,#diagram .sev-Critical{stroke:var(--sev-crit)}#diagram [data-sev=Critical] .sevtx{fill:var(--sev-crit)}
+#diagram [data-sev=High] .box,#diagram .sev-High{stroke:var(--sev-high)}#diagram [data-sev=High] .sevtx{fill:var(--sev-high)}
+#diagram [data-sev=Medium] .box,#diagram .sev-Medium{stroke:var(--sev-med)}#diagram [data-sev=Medium] .sevtx{fill:var(--sev-med)}
+#diagram [data-sev=Low] .box,#diagram .sev-Low{stroke:var(--sev-low)}#diagram [data-sev=Low] .sevtx{fill:var(--sev-low)}
 .dimbox{opacity:.35}
 #diagram .node{cursor:pointer}#diagram .dim{opacity:.12}#diagram .hl rect:first-of-type{stroke-width:4}
 @media print{.toolbar,.js-only{display:none!important}.dimbox{opacity:1}#diagram .dim{opacity:1}}
@@ -317,6 +401,13 @@ UI_JS = r"""
 document.documentElement.classList.add('js');
 var $=function(s){return document.querySelector(s)}, $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
 var rows=$$('tr.frow'), state={host:null};
+// theme picker: remembered per browser, ignored if storage is blocked
+var theme=$('#theme'), root=document.documentElement;
+theme.value=root.getAttribute('data-theme')||'classic';
+theme.addEventListener('change',function(){
+  if(theme.value==='classic')root.removeAttribute('data-theme'); else root.setAttribute('data-theme',theme.value);
+  try{localStorage.setItem('%THEME_KEY%',theme.value)}catch(e){}
+});
 function txt(r){return Object.keys(r.dataset).map(function(k){return r.dataset[k]}).join(' ').toLowerCase()}
 function apply(){
   var q=$('#q').value.trim().toLowerCase(), sev=$('#f-sev').value, kind=$('#f-kind').value,

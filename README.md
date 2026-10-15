@@ -101,6 +101,11 @@ results make sense before running a larger case.
 `report.html` is a single file that works offline. It needs no server and loads
 nothing from the internet.
 
+Use the **Theme** menu at the top right to switch between Classic Light and the Múcaro
+themes (SOC Dark, Nord Calm, High Contrast, Matrix, Mucaro Dusk, Field Notebook and
+Terminal Amber). The choice is remembered in that browser. Printed copies always use
+Classic Light.
+
 1. Read the **Summary** for the number of targeted vulnerable services, possible login
    successes, unblocked IPS detections and hostile sources. Check the notices beneath it;
    they say when a source is missing, for example when no Zeek login logs were supplied.

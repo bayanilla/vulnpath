@@ -67,6 +67,13 @@ class DemoCase(unittest.TestCase):
                      "evidence_manifest.json", "data_quality.json"]:
             self.assertTrue((self.out / name).stat().st_size > 0, name)
 
+    def test_report_theme_picker(self):
+        html = (self.out / "report.html").read_text(encoding="utf-8")
+        for tid in ["soc", "nord", "contrast", "matrix", "mucaro", "notebook", "amber"]:
+            self.assertIn(f"<option value='{tid}'>", html)
+            self.assertIn(f":root[data-theme='{tid}']", html)
+        self.assertIn("<option value='classic'>Classic Light</option>", html)
+
     def test_evidence_not_modified(self):
         for p, h in self.hashes.items():
             self.assertEqual(sha256_file(p), h, p)

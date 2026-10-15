@@ -136,12 +136,12 @@ def render(findings: list[dict], paths: list[dict], chains: list[dict]) -> str:
            f'height="{height}" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12">',
            '<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" '
            'orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>',
-           f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
-           f'<text x="{MARGIN}" y="{MARGIN + 6}" font-size="15" font-weight="600" fill="#111827">'
+           f'<rect class="bg" width="{width}" height="{height}" fill="#ffffff"/>',
+           f'<text x="{MARGIN}" y="{MARGIN + 6}" font-size="15" font-weight="600" fill="#111827" class="ink">'
            'Hostile activity against vulnerable services</text>']
     if not keep:
-        out.append(f'<text x="{MARGIN}" y="{MARGIN + 40}" fill="#6b7280">No hostile behaviour reached a '
-                   'scanned host.</text>')
+        out.append(f'<text x="{MARGIN}" y="{MARGIN + 40}" fill="#6b7280" class="ink3">'
+                   'No hostile behaviour reached a scanned host.</text>')
 
     for (s, d, port, proto), e in sorted(edges.items(), key=lambda kv: STYLES[kv[1]["style"]][3]):
         x1, y1 = pos[s][0] + NODE_W, pos[s][1] + NODE_H / 2
@@ -149,13 +149,16 @@ def render(findings: list[dict], paths: list[dict], chains: list[dict]) -> str:
         color, dash, w, _ = STYLES[e["style"]]
         dx = max(60, abs(x2 - x1) / 2)
         dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
+        ink = ' class="ink"' if e["style"] == "onward" else ""
+        label_cls = "halo ink" if ink else "halo"
         out.append(f'<g class="edge" data-src="{escape(s)}" data-dst="{escape(d)}" data-port="{port}">')
         out.append(f'<path d="M{x1},{y1} C{x1 + dx},{y1} {x2 - dx},{y2} {x2},{y2}" fill="none" '
-                   f'stroke="{color}" stroke-width="{w}"{dash_attr} marker-end="url(#arr)"/>')
+                   f'stroke="{color}" stroke-width="{w}"{dash_attr} marker-end="url(#arr)"{ink}/>')
         if e["style"] not in ("scan",):   # plain scan edges are summarised on the source node
             mx, my = x1 + (x2 - x1) * 0.5, y1 + (y2 - y1) * 0.5 - 6
             out.append(f'<text x="{mx}" y="{my}" text-anchor="middle" fill="{color}" font-size="11" '
-                       f'paint-order="stroke" stroke="#fff" stroke-width="3">{escape(e["label"])}</text>')
+                       f'paint-order="stroke" stroke="#fff" stroke-width="3" class="{label_cls}">'
+                       f'{escape(e["label"])}</text>')
         out.append('</g>')
 
     for n in keep:
@@ -164,15 +167,17 @@ def render(findings: list[dict], paths: list[dict], chains: list[dict]) -> str:
         color = SEV_COLOR[sev]
         is_src = sev is None
         fill = "#f1f5f9" if is_src else "#ffffff"
-        out.append(f'<g class="node" data-host="{escape(n)}"><title>{escape(n)}: click to focus</title>')
-        out.append(f'<rect x="{x}" y="{y}" width="{NODE_W}" height="{NODE_H}" rx="8" fill="{fill}" '
+        box_cls = "box src" if is_src else "box"
+        out.append(f'<g class="node" data-host="{escape(n)}" data-sev="{sev or "none"}">'
+                   f'<title>{escape(n)}: click to focus</title>')
+        out.append(f'<rect class="{box_cls}" x="{x}" y="{y}" width="{NODE_W}" height="{NODE_H}" rx="8" fill="{fill}" '
                    f'stroke="{color}" stroke-width="{3 if n in chained else 2}"/>')
         title = n + ("  (external)" if external.get(n) else "")
-        out.append(f'<text x="{x + 10}" y="{y + 20}" font-weight="600" fill="#111827">{escape(title)}</text>')
+        out.append(f'<text x="{x + 10}" y="{y + 20}" font-weight="600" fill="#111827" class="ink">{escape(title)}</text>')
         sub = node_name.get(n) or ("hostile source: " + ", ".join(sorted(src_roles.get(n, ()))) if is_src else "")
-        out.append(f'<text x="{x + 10}" y="{y + 37}" fill="#4b5563">{escape(sub[:36])}</text>')
+        out.append(f'<text x="{x + 10}" y="{y + 37}" fill="#4b5563" class="ink2">{escape(sub[:36])}</text>')
         if not is_src:
-            out.append(f'<text x="{x + 10}" y="{y + 55}" fill="{color}">{escape(sev)}: '
+            out.append(f'<text x="{x + 10}" y="{y + 55}" fill="{color}" class="sevtx">{escape(sev)}: '
                        f'{escape(node_vuln.get(n, ""))}</text>')
         if n in chained:
             out.append(f'<rect x="{x + NODE_W - 58}" y="{y - 9}" width="54" height="18" rx="9" fill="#b91c1c"/>'
@@ -182,7 +187,7 @@ def render(findings: list[dict], paths: list[dict], chains: list[dict]) -> str:
 
     # Legend
     ly = height - 150
-    out.append(f'<text x="{MARGIN}" y="{ly}" font-weight="600" fill="#111827">Legend</text>')
+    out.append(f'<text x="{MARGIN}" y="{ly}" font-weight="600" fill="#111827" class="ink">Legend</text>')
     items = [("success", "Possible successful login after failures"),
              ("ips", "IPS detection NOT blocked (alert only)"),
              ("brute", "Brute force or failed logins"),
@@ -194,16 +199,17 @@ def render(findings: list[dict], paths: list[dict], chains: list[dict]) -> str:
         c, dash, w, _ = STYLES[st]
         yy = ly + 18 + i * 18
         d = f' stroke-dasharray="{dash}"' if dash else ""
+        ink = ' class="ink"' if st == "onward" else ""
         out.append(f'<line x1="{MARGIN}" y1="{yy - 4}" x2="{MARGIN + 40}" y2="{yy - 4}" stroke="{c}" '
-                   f'stroke-width="{w}"{d}/><text x="{MARGIN + 50}" y="{yy}" fill="#374151">{escape(label)}</text>')
+                   f'stroke-width="{w}"{d}{ink}/><text x="{MARGIN + 50}" y="{yy}" fill="#374151" class="ink2">{escape(label)}</text>')
     lx = MARGIN + 420
     for i, sev in enumerate(["Critical", "High", "Medium", "Low"]):
         out.append(f'<rect x="{lx}" y="{ly + 6 + i * 18}" width="14" height="12" fill="none" '
-                   f'stroke="{SEV_COLOR[sev]}" stroke-width="2"/><text x="{lx + 22}" y="{ly + 16 + i * 18}" '
-                   f'fill="#374151">{sev} vulnerability on target</text>')
+                   f'stroke="{SEV_COLOR[sev]}" stroke-width="2" class="sev-{sev}"/><text x="{lx + 22}" y="{ly + 16 + i * 18}" '
+                   f'fill="#374151" class="ink2">{sev} vulnerability on target</text>')
     out.append(f'<rect x="{lx}" y="{ly + 78}" width="34" height="14" rx="7" fill="#b91c1c"/>'
-               f'<text x="{lx + 42}" y="{ly + 89}" fill="#374151">Same-host vulnerability chain candidate</text>')
-    out.append(f'<text x="{MARGIN}" y="{height - 8}" fill="#6b7280" font-size="11">'
+               f'<text x="{lx + 42}" y="{ly + 89}" fill="#374151" class="ink2">Same-host vulnerability chain candidate</text>')
+    out.append(f'<text x="{MARGIN}" y="{height - 8}" fill="#6b7280" font-size="11" class="ink3">'
                'Detected behaviour and candidate paths are leads, not confirmed compromise.</text>')
     out.append("</svg>")
     return "\n".join(out)
