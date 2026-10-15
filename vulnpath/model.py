@@ -17,7 +17,7 @@ class EvidenceRef:
 
 @dataclass
 class Connection:
-    """One network observation, normalized from Zeek (later Palo Alto)."""
+    """One network observation, normalized from Zeek or Palo Alto."""
     ts: float                 # epoch seconds, UTC
     src: str
     src_port: Optional[int]
@@ -37,6 +37,8 @@ class Connection:
     app: str = ""
     rule: str = ""
     threat: Optional["ThreatHit"] = None   # set for IPS/threat detections (not a connection count)
+    auth: Optional["AuthResult"] = None    # set for authentication log records (not a connection count)
+    duration: Optional[float] = None       # session length in seconds, when the sensor records it
 
 
 @dataclass
@@ -50,6 +52,20 @@ class ThreatHit:
     blocked: bool
     direction: str
     cves: list[str] = field(default_factory=list)
+    repeat: int = 1           # PAN-OS aggregates identical threat logs and records a repeat count
+
+    @property
+    def is_brute_force(self) -> bool:
+        return "brute" in self.name.lower() and "force" in self.name.lower()
+
+
+@dataclass
+class AuthResult:
+    """One authentication exchange seen by a protocol analyser (Zeek ssh.log, ntlm.log, kerberos.log)."""
+    service: str              # ssh / ntlm / kerberos
+    success: Optional[bool]   # None when the analyser could not tell
+    failures: int = 0         # failed attempts in this record (ssh.log can hold several)
+    user: str = ""
 
 
 @dataclass
@@ -73,6 +89,7 @@ class Vulnerability:
     solution: str = ""
     scan_time: Optional[float] = None
     evidence: Optional[EvidenceRef] = None
+    plugin_family: str = ""
 
     @property
     def severity_label(self) -> str:

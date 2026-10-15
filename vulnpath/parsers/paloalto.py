@@ -22,7 +22,7 @@ from ..detect import open_text
 from ..evidence import EvidenceFile
 from ..model import Connection, EvidenceRef, ThreatHit
 
-PARSER_VERSION = "paloalto/0.1"
+PARSER_VERSION = "paloalto/0.2"
 WANTED = {"TRAFFIC", "THREAT"}
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,7}", re.I)
 SYSLOG_START = re.compile(r"(?:^|[\s>])(\d*,\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2},[^,]*,([A-Z]+),)")
@@ -30,8 +30,10 @@ NOT_BLOCKED = {"alert", "allow", ""}
 
 # Syslog field positions (PAN-OS Traffic / Threat log field docs). Fields 0-30 are shared.
 POS = {"time": 6, "src": 7, "dst": 8, "nat_src": 9, "nat_dst": 10, "rule": 11, "app": 14, "type": 3,
-       "subtype": 4, "session": 22, "sport": 24, "dport": 25, "nat_dport": 27, "proto": 29, "action": 30}
-POS_TRAFFIC = {"bytes_sent": 32, "bytes_recv": 33, "end_reason": 46}
+       "subtype": 4, "session": 22, "repeat": 23, "sport": 24, "dport": 25, "nat_dport": 27, "proto": 29, "action": 30}
+POS_TRAFFIC = {"bytes_sent": 32, "bytes_recv": 33, "elapsed": 36, "end_reason": 46}
+# App-ID values for sessions that completed the handshake but never carried application data.
+NO_DATA_APPS = {"incomplete", "insufficient-data"}
 POS_THREAT = {"threat": 32, "severity": 34, "direction": 35}
 
 # Header CSV column aliases, compared after lower-casing and stripping non-alphanumerics.
@@ -53,6 +55,8 @@ ALIASES = {
     "bytes_sent": ["bytessent"],
     "bytes_recv": ["bytesreceived"],
     "end_reason": ["sessionendreason"],
+    "elapsed": ["elapsedtimesec", "elapsedtime"],
+    "repeat": ["repeatcount"],
     "threat": ["threatcontentname", "threatname", "threatid", "name"],
     "threat_id": ["threatid"],
     "severity": ["severity"],
@@ -115,6 +119,13 @@ def _int(v, default=None):
         return default
 
 
+def _float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _proto(v: str) -> str:
     v = (v or "").strip().lower()
     return {"6": "tcp", "17": "udp", "1": "icmp"}.get(v, v)
@@ -132,6 +143,8 @@ def _record(get, ef: EvidenceFile, locator: str, offset: float, tmap: dict) -> C
     ltype = get("type").upper() or ("THREAT" if get("threat") else "TRAFFIC")
     if ltype not in WANTED:
         return None
+    if ltype == "TRAFFIC" and get("subtype").lower() == "start":
+        return None   # log-at-session-start entry; the session's end entry carries the result
     src, dst = get("src"), get("dst")
     dport = _int(get("dport"))
     if not src or not dst or dport is None:
@@ -155,11 +168,13 @@ def _record(get, ef: EvidenceFile, locator: str, offset: float, tmap: dict) -> C
         cves = sorted({c.upper() for c in CVE_RE.findall(name + " " + get("cve"))} | set(tmap.get(tid, [])))
         threat = ThreatHit(subtype=get("subtype").lower(), name=name, threat_id=tid,
                            severity=get("severity").lower(), action=action,
-                           blocked=action not in NOT_BLOCKED, direction=get("direction").lower(), cves=cves)
+                           blocked=action not in NOT_BLOCKED, direction=get("direction").lower(), cves=cves,
+                           repeat=max(_int(get("repeat"), 1) or 1, 1))
         outcome = "threat"
     elif action == "allow":
-        # An allowed session with no bytes back never got an answer from the server.
-        outcome = "established" if recv > 0 else "attempt"
+        # An allowed session with no bytes back never got an answer from the server, and one that App-ID
+        # saw no data in ("incomplete") never got past the handshake.
+        outcome = "established" if recv > 0 and get("app").lower() not in NO_DATA_APPS else "attempt"
     else:
         outcome = "denied"
     return Connection(
@@ -168,6 +183,7 @@ def _record(get, ef: EvidenceFile, locator: str, offset: float, tmap: dict) -> C
         resp_bytes=recv, state=action, session_id=get("session"),
         evidence=EvidenceRef(ef.file_id, ef.rel_path, f"{locator} {ltype.lower()} session {get('session')}"),
         pre_nat_dst=pre_dst, pre_nat_dst_port=pre_port, app=get("app"), rule=get("rule"), threat=threat,
+        duration=_float(get("elapsed")),
     )
 
 
@@ -208,11 +224,13 @@ def parse(ef: EvidenceFile, utc_offset: float = 0.0, threat_map: dict | None = N
                 continue
             if conn is None:
                 t = get("type").upper() or "UNKNOWN"
+                if t == "TRAFFIC":
+                    t = "TRAFFIC session-start"
                 skipped_types[t] = skipped_types.get(t, 0) + 1
                 continue
             ef.records_parsed += 1
             yield conn
     for t, n in sorted(skipped_types.items()):
-        ef.issues.append(f"{n} {t} log line(s) ignored (only TRAFFIC and THREAT are used)")
+        ef.issues.append(f"{n} {t} log line(s) ignored (only TRAFFIC end and THREAT logs are used)")
     if ef.records_parsed:
         ef.issues.append(f"timestamps have no time zone; interpreted as UTC{utc_offset:+g}")
