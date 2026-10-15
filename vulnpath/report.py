@@ -142,6 +142,12 @@ FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
            "%3Crect width='64' height='64' rx='14' fill='%23141a1c'/%3E%3Cpath fill='%23c9dddd' "
            "d='M12 48V16h10l10 16 10-16h10v32H42V31l-7 12h-6l-7-12v17H12z'/%3E%3C/svg%3E")
 
+# The same mark drawn inline for the report header. The fixed dark tile is the brand mark itself;
+# the outline in UI_CSS keeps it visible on the dark themes.
+MARK_SVG = ("<svg class='mark' viewBox='0 0 64 64' width='36' height='36' aria-hidden='true'>"
+            "<rect width='64' height='64' rx='14' fill='#141a1c'/><path fill='#c9dddd' "
+            "d='M12 48V16h10l10 16 10-16h10v32H42V31l-7 12h-6l-7-12v17H12z'/></svg>")
+
 # Runs in <head> so a saved theme applies before the page is painted.
 THEME_BOOT = ("(function(){try{var t=localStorage.getItem('%s');if(%s.indexOf(t)>0)"
               "document.documentElement.setAttribute('data-theme',t)}catch(e){}})();"
@@ -178,7 +184,9 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
          f"<link rel='icon' type='image/svg+xml' href=\"{FAVICON}\">"
          f"<meta name='viewport' content='width=device-width,initial-scale=1'><script>{THEME_BOOT}</script>"
          f"<style>{_theme_css()}{CSS}{UI_CSS}</style></head><body>",
-         "<div class='titlebar'><h1>VulnPath report: which vulnerable services are being targeted</h1>"
+         "<div class='titlebar'><div><div class='brand'>" + MARK_SVG + "<span><strong>Múcaro</strong>"
+         "<span class='brand-divider'> | </span>VulnPath</span></div>"
+         "<h1>VulnPath report: which vulnerable services are being targeted</h1></div>"
          + _theme_picker() + "</div>",
          f"<div class='muted'>Case folder: <code>{e(ctx['case'])}</code> · generated {e(ctx['generated'])} · "
          f"VulnPath {e(ctx['version'])}</div>",
@@ -381,6 +389,9 @@ UI_CSS = """
 .js .theme-picker.js-only{display:flex}
 .titlebar{display:flex;gap:16px;align-items:flex-start;justify-content:space-between}
 .titlebar h1{margin-top:0}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:18px;color:var(--muted)}
+.brand strong{color:var(--text)}.brand-divider{padding:0 4px}
+.brand .mark{flex:none;border-radius:8px;box-shadow:0 0 0 1px var(--border-strong)}
 .theme-picker{flex:none;margin-left:auto;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 .toolbar{position:sticky;top:0;z-index:5;background:var(--bg);flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
 .toolbar input[type=search]{flex:1 1 240px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text)}
