@@ -14,7 +14,7 @@ from pathlib import Path
 
 try:
     import tkinter as tk
-    from tkinter import filedialog, messagebox, ttk
+    from tkinter import filedialog, font as tkfont, messagebox, ttk
 except ImportError:  # pragma: no cover
     sys.exit("tkinter is not available in this Python. Use the command line instead:\n"
              "  python investigate.py --input <case> --output <results>\n"
@@ -66,6 +66,7 @@ class Launcher(tk.Tk):
         self.exclude = tk.StringVar()
         self.window = tk.StringVar(value="15")
 
+        self._brand()
         root = ttk.Frame(self, padding=12)
         root.pack(fill="both", expand=True)
         root.columnconfigure(1, weight=1)
@@ -131,6 +132,22 @@ class Launcher(tk.Tk):
                 self.iconbitmap(default=str(ASSETS / "vulnpath.ico"))
         except tk.TclError:
             pass
+
+    def _brand(self) -> None:
+        """Header with the Múcaro M and "Múcaro | VulnPath", as in Pathfinder and the BGP lookup."""
+        bar = ttk.Frame(self, padding=(12, 12, 12, 0))
+        bar.pack(fill="x")
+        try:
+            self._mark = tk.PhotoImage(file=str(ASSETS / "vulnpath-48.png"))
+            ttk.Label(bar, image=self._mark).pack(side="left", padx=(8, 10))
+        except tk.TclError:
+            pass
+        big = tkfont.nametofont("TkDefaultFont").copy()
+        big.configure(size=16, weight="bold")
+        light = big.copy()
+        light.configure(weight="normal")
+        ttk.Label(bar, text="Múcaro", font=big).pack(side="left")
+        ttk.Label(bar, text="  |  VulnPath", font=light, foreground="#4b5563").pack(side="left")
 
     def _row(self, parent, r, label, var, cmd):
         ttk.Label(parent, text=label).grid(row=r, column=0, sticky="w", **PAD)
