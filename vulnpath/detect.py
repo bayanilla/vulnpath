@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 SNIFF_BYTES = 64 * 1024
+ZEEK_KINDS = ("conn", "ssh", "ntlm", "kerberos")
 
 
 def open_text(path: Path):
@@ -45,7 +46,7 @@ def detect(path: Path) -> str:
             if line.startswith("#path"):
                 parts = line.split(None, 1)
                 kind = parts[1].strip() if len(parts) > 1 else ""
-                return "zeek_conn" if kind == "conn" else f"zeek_{kind or 'unknown'}_unsupported"
+                return f"zeek_{kind}" if kind in ZEEK_KINDS else f"zeek_{kind or 'unknown'}_unsupported"
         return "unsupported"
 
     # Zeek JSON: one object per line with id.* fields
@@ -58,6 +59,12 @@ def detect(path: Path) -> str:
         if isinstance(obj, dict) and "id.orig_h" in obj and "id.resp_p" in obj:
             if "conn_state" in obj or "orig_bytes" in obj or "history" in obj:
                 return "zeek_conn"
+            if "auth_success" in obj or "auth_attempts" in obj or "kex_alg" in obj or "host_key_alg" in obj:
+                return "zeek_ssh"
+            if "request_type" in obj and ("client" in obj or "service" in obj):
+                return "zeek_kerberos"
+            if "server_nb_computer_name" in obj or "domainname" in obj:
+                return "zeek_ntlm"
             return "zeek_other_unsupported"
         return "unsupported"
 

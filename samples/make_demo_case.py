@@ -4,6 +4,8 @@
 All IPs, hostnames and plugin IDs are made up. CVE IDs and CVSS vectors are real, chosen so the
 scenarios are realistic. Usage: python samples/make_demo_case.py [output_folder]
 """
+from __future__ import annotations
+
 import json
 import random
 import sys
@@ -57,9 +59,17 @@ HOSTS = [
 ]
 
 
-def nessus_xml() -> str:
+OLDER_SCAN = "Mon Jun  1 08:00:00 2026"
+Q3_EXTRA = {"10.0.1.10": [(8080, "tcp", "www", "900104", "Apache Struts RCE (fixed before Q4)", 4, ["CVE-2017-5638"],
+                           "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H", 10.0, True, ["metasploit"])]}
+
+
+def nessus_xml(scan_override: str = "", extra: dict | None = None) -> str:
+    extra = extra or {}
     out = ['<?xml version="1.0" ?>', '<NessusClientData_v2>', '<Report name="Quarterly internal scan">']
     for ip, fqdn, os_, scan, items in HOSTS:
+        scan = scan_override or scan
+        items = items + extra.get(ip, [])
         out.append(f'<ReportHost name="{ip}"><HostProperties>')
         for k, v in [("host-ip", ip), ("host-fqdn", fqdn), ("operating-system", os_),
                      ("HOST_START", scan), ("HOST_END", scan)]:
@@ -92,13 +102,18 @@ class Conns:
         self.rng = random.Random(seed)
         self.n = 0
 
-    def add(self, t, src, dst, dport, state, proto="tcp", svc="-", ob=0, rb=0):
+    def add(self, t, src, dst, dport, state, proto="tcp", svc="-", ob=0, rb=0, dur=0.5):
         self.n += 1
         uid = f"C{self.n:07d}demo"
         self.rows.append({"ts": round(T0 + t, 6), "uid": uid, "id.orig_h": src,
                           "id.orig_p": self.rng.randint(1025, 65000), "id.resp_h": dst, "id.resp_p": dport,
-                          "proto": proto, "service": svc, "duration": 0.5, "orig_bytes": ob, "resp_bytes": rb,
+                          "proto": proto, "service": svc, "duration": dur, "orig_bytes": ob, "resp_bytes": rb,
                           "conn_state": state, "history": "ShADadfF" if state == "SF" else "S"})
+        return uid
+
+
+SCANNED = [h[0] for h in HOSTS]
+NESSUS_SCANNER = "10.0.0.250"
 
 
 def build(out: Path) -> Path:
@@ -106,26 +121,66 @@ def build(out: Path) -> Path:
     (out / "scans").mkdir(exist_ok=True)
     (out / "zeek").mkdir(exist_ok=True)
     (out / "scans" / "internal_q4.nessus").write_text(nessus_xml(), encoding="utf-8")
+    # An older export of the same hosts. web01's Struts flaw was fixed before Q4, so it must not be reported.
+    (out / "scans" / "internal_q3.nessus").write_text(nessus_xml(OLDER_SCAN, Q3_EXTRA), encoding="utf-8")
 
     c = Conns()
-    # Scenario A: external source reaches web01:443 (vulnerable Apache), then web01 reaches app02:445 (MS17-010).
+    ssh_rows = []
+    # A: external source reaches web01:443 (vulnerable Apache, IPS alerts in the firewall logs), then web01
+    #    reaches app02:445 (MS17-010): a candidate path.
     for i in range(12):
         c.add(2 * 3600 + i * 60, "203.0.113.50", "10.0.1.10", 443, "SF", svc="ssl", ob=900 + i, rb=4200)
     for i in range(3):
         c.add(2 * 3600 + 40 * 60 + i * 30, "10.0.1.10", "10.0.2.20", 445, "SF", svc="smb", ob=5300, rb=1800)
-    # app02 tries db01:445 but never completes a handshake (attempt, not a path hop).
+    # app02 tries db01:445 but never completes a handshake: no behaviour, no finding.
     for i in range(4):
         c.add(3 * 3600 + i * 10, "10.0.2.20", "10.0.2.30", 445, "S0")
-    # Scanner sweeps the DMZ: probing.
-    for h in ["10.0.1.10", "10.0.1.15", "10.0.1.30", "10.0.1.40"]:
-        for p in [21, 22, 23, 25, 80, 443, 445, 3389, 8009, 8080]:
-            c.add(3600 + len(c.rows), "198.51.100.7", h, p, "REJ" if p in (21, 23) else "S0")
-    # Normal user browsing the portal on 443: vulnerability is on 8009, so no finding.
+    # B: external scanner sweeps the DMZ (40 addresses, 8 ports) within a few minutes. Only the hosts that
+    #    exist answer on their open ports.
+    open_ports = {("10.0.1.10", 443), ("10.0.1.10", 22), ("10.0.1.15", 443), ("10.0.1.30", 443),
+                  ("10.0.1.30", 8009), ("10.0.1.40", 3389)}
+    k = 0
+    for p in [21, 22, 23, 80, 443, 445, 3389, 8009]:
+        for last in range(1, 41):
+            h = f"10.0.1.{last}"
+            k += 1
+            c.add(3600 + k * 0.5, "198.51.100.7", h, p, "SF" if (h, p) in open_ports else ("REJ" if p in (21, 23)
+                  else "S0"), ob=0, rb=0 if (h, p) not in open_ports else 300, dur=0.1)
+    # C: normal user browsing the portal on 443: the vulnerability is on 8009, and browsing is not hostile.
     for i in range(20):
         c.add(4 * 3600 + i * 120, "10.0.5.100", "10.0.1.30", 443, "SF", svc="ssl", ob=700, rb=30000)
-    # Attempts against rdp01 (stale scan): attempted + stale.
+    # D: attempts against rdp01 (stale scan), blocked by the firewall IPS.
     for i in range(6):
         c.add(6 * 3600 + i * 5, "203.0.113.77", "10.0.1.40", 3389, "S0")
+    # E: normal use of the vulnerable SMB service on app02 by 40 workstations: must produce no finding.
+    for w in range(10, 50):
+        for i in range(8):
+            c.add(c.rng.randint(0, 86000), f"10.0.5.{w}", "10.0.2.20", 445, "SF", svc="smb", ob=c.rng.randint(800, 90000),
+                  rb=c.rng.randint(800, 400000), dur=c.rng.uniform(1, 600))
+    # F: 8 workstations each open 12 short, identical SMB sessions to app02 at logon: matches the brute-force
+    #    pattern, but so many peers do it that it is treated as routine.
+    for w in range(60, 68):
+        base = 8 * 3600 + w * 60
+        for i in range(12):
+            c.add(base + i * 20, f"10.0.5.{w}", "10.0.2.20", 445, "SF", svc="smb", ob=1200, rb=900, dur=0.8)
+    # G: one internal host hammers db01's SMB service: 120 short, identical sessions in 10 minutes.
+    for i in range(120):
+        c.add(9 * 3600 + i * 5, "10.0.5.200", "10.0.2.30", 445, "SF", svc="smb", ob=1350, rb=600, dur=0.4)
+    # H: SSH brute force against web01:22 (regreSSHion host, with PwnKit for privilege escalation). Zeek's
+    #    ssh.log shows the failures and then a successful login, followed by a long session.
+    for i in range(40):
+        t = 10 * 3600 + i * 12
+        uid = c.add(t, "203.0.113.120", "10.0.1.10", 22, "SF", svc="ssh", ob=2100, rb=2600, dur=3.0)
+        ssh_rows.append((t, uid, "203.0.113.120", "10.0.1.10", "F", 3))
+    t = 10 * 3600 + 40 * 12 + 30
+    uid = c.add(t, "203.0.113.120", "10.0.1.10", 22, "SF", svc="ssh", ob=48000, rb=310000, dur=1800.0)
+    ssh_rows.append((t, uid, "203.0.113.120", "10.0.1.10", "T", 1))
+    # I: the Nessus scanner sweeps every scanned host, open and closed ports. Excluded with --exclude-sources
+    #    in the demo command; without it, it shows up as a scanner.
+    for h in SCANNED:
+        for p in range(1, 30):
+            c.add(5 * 3600 + k, NESSUS_SCANNER, h, p, "REJ", dur=0.0)
+            k += 1
     # Background noise: DNS.
     for i in range(2000):
         c.add(i * 20, f"10.0.5.{c.rng.randint(2, 250)}", "10.0.0.53", 53, "SF", proto="udp", svc="dns",
@@ -140,6 +195,24 @@ def build(out: Path) -> Path:
     lines.insert(500, "this line is corrupted")
     lines.append("#close\t2026-10-11-00-00-00")
     (out / "zeek" / "conn.00_00_00-23_59_59.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    ssh_fields = ["ts", "uid", "id.orig_h", "id.orig_p", "id.resp_h", "id.resp_p", "version", "auth_success",
+                  "auth_attempts", "direction", "client", "server"]
+    lines = ["#separator \\x09", "#set_separator\t,", "#empty_field\t(empty)", "#unset_field\t-",
+             "#path\tssh", "#open\t2026-10-10-00-00-00", "#fields\t" + "\t".join(ssh_fields),
+             "#types\ttime\tstring\taddr\tport\taddr\tport\tcount\tbool\tcount\tenum\tstring\tstring"]
+    for t, uid, src, dst, ok, attempts in ssh_rows:
+        lines.append("\t".join([f"{T0 + t:.6f}", uid, src, "50022", dst, "22", "2", ok, str(attempts), "INBOUND",
+                                "SSH-2.0-libssh2_1.10.0", "SSH-2.0-OpenSSH_8.2p1"]))
+    (out / "zeek" / "ssh.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # J: password spraying over NTLM against app02: one workstation, 12 user names, all failing.
+    with open(out / "zeek" / "ntlm.json", "w", encoding="utf-8") as f:
+        for i in range(12):
+            f.write(json.dumps({"ts": T0 + 11 * 3600 + i * 15, "uid": f"N{i:06d}demo", "id.orig_h": "10.0.5.77",
+                                "id.orig_p": 49000 + i, "id.resp_h": "10.0.2.20", "id.resp_p": 445,
+                                "username": f"user{i:02d}", "hostname": "WS-77", "domainname": "CORP",
+                                "server_nb_computer_name": "APP02", "success": False}) + "\n")
 
     # Second day, Zeek JSON format. mail01 talks to app02 at 01:00, BEFORE mail01 is reached at 05:00,
     # so it must NOT be chained after the inbound hop (time order).
@@ -204,6 +277,12 @@ def write_paloalto(folder: Path) -> None:
                                   "reset-both", 71000 + i, app="ms-rdp",
                                   threat="Microsoft RDP Remote Code Execution Vulnerability(95002)",
                                   severity="critical")))
+    for i in range(2):   # day 2: ProxyShell signature against mail01, alert only
+        t = 86400 + 5 * 3600 + 30 + i * 60
+        lines.append((t, _pan_row("THREAT", "vulnerability", t, "203.0.113.60", "198.18.10.15", "10.0.1.15", 443,
+                                  "alert", 75000 + i,
+                                  threat="Microsoft Exchange Server Remote Code Execution Vulnerability(95003)",
+                                  severity="critical")))
     t = 3600 + 30
     lines.append((t, _pan_row("THREAT", "scan", t, "198.51.100.7", "198.18.10.10", "10.0.1.10", 22, "drop", 72000,
                               app="ssh", threat="TCP Port Scan(8001)", severity="medium")))
@@ -224,11 +303,12 @@ def write_paloalto(folder: Path) -> None:
            "NAT Destination Port", "IP Protocol", "Action", "Bytes", "Bytes Sent", "Bytes Received",
            "Session End Reason"]
     rows = []
-    for i in range(3):   # blocked attempts at the Ghostcat AJP port
-        tt = _pan_time(7 * 3600 + i * 30)
+    for i, port in enumerate([21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 389, 445, 1433, 3306, 3389, 5432,
+                              5900, 8000, 8009, 8080]):   # port scan of the portal, denied by the firewall
+        tt = _pan_time(7 * 3600 + i * 3)
         rows.append([tt, "013201000123", "TRAFFIC", "end", tt, "203.0.113.90", "198.18.10.30", "0.0.0.0",
-                     "10.0.1.30", "deny-ajp", "incomplete", "untrust", "dmz", str(73000 + i), "40000", "8009", "0",
-                     "8009", "tcp", "deny", "74", "74", "0", "policy-deny"])
+                     "10.0.1.30", "deny-all", "incomplete", "untrust", "dmz", str(73000 + i), "40000", str(port),
+                     "0", str(port), "tcp", "deny", "74", "74", "0", "policy-deny"])
     for i in range(5):   # normal HTTPS to the portal: vulnerability is on 8009, so no finding
         tt = _pan_time(8 * 3600 + i * 30)
         rows.append([tt, "013201000123", "TRAFFIC", "end", tt, "192.0.2.25", "198.18.10.30", "0.0.0.0",

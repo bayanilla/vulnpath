@@ -8,7 +8,7 @@ from typing import Iterator
 from ..evidence import EvidenceFile
 from ..model import EvidenceRef, HostInfo, Vulnerability
 
-PARSER_VERSION = "nessus_v2/0.1"
+PARSER_VERSION = "nessus_v2/0.2"
 MIN_SEVERITY = 1  # skip informational (severity 0) items
 
 
@@ -105,5 +105,6 @@ def _item(item: ET.Element, ip: str, hostname: str, scan_time, ef: EvidenceFile)
         synopsis=text("synopsis"),
         solution=text("solution"),
         scan_time=scan_time,
+        plugin_family=item.get("pluginFamily", ""),
         evidence=EvidenceRef(ef.file_id, ef.rel_path, f"ReportHost {ip} / plugin {pid} / port {port}/{item.get('protocol', '')}"),
     )

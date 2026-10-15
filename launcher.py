@@ -39,7 +39,7 @@ def open_path(p: Path) -> None:
 class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("VulnPath: vulnerability & attack-path correlation")
+        self.title("VulnPath: which vulnerable services are being targeted")
         self.minsize(760, 560)
         self.msgs: queue.Queue = queue.Queue()
         self.out_dir: Path | None = None
@@ -50,14 +50,16 @@ class Launcher(tk.Tk):
         self.offset = tk.StringVar(value="0")
         self.tmap = tk.StringVar()
         self.stale = tk.StringVar(value="30")
-        self.scan = tk.StringVar(value="20")
+        self.exclude = tk.StringVar()
+        self.window = tk.StringVar(value="15")
 
         root = ttk.Frame(self, padding=12)
         root.pack(fill="both", expand=True)
         root.columnconfigure(1, weight=1)
 
-        ttk.Label(root, text="Correlate raw Zeek / Palo Alto logs with a Nessus scan. Runs fully offline; "
-                             "input files are never modified.", foreground="#4b5563").grid(
+        ttk.Label(root, text="Find scanning, brute force and IPS detections in raw Zeek / Palo Alto logs and "
+                             "rank the vulnerable services they target. Runs offline; inputs are never modified.",
+                  foreground="#4b5563", wraplength=720).grid(
             row=0, column=0, columnspan=3, sticky="w", **PAD)
 
         self._row(root, 1, "Case folder (raw files)", self.case, self._pick_case)
@@ -76,8 +78,11 @@ class Launcher(tk.Tk):
         ttk.Button(adv, text="Browse…", command=self._pick_tmap).grid(row=2, column=2, **PAD)
         ttk.Label(adv, text="Flag scan as stale after (days)").grid(row=3, column=0, sticky="w", **PAD)
         ttk.Spinbox(adv, from_=1, to=3650, width=6, textvariable=self.stale).grid(row=3, column=1, sticky="w", **PAD)
-        ttk.Label(adv, text="Probing threshold (distinct host:port per source)").grid(row=4, column=0, sticky="w", **PAD)
-        ttk.Spinbox(adv, from_=2, to=100000, width=6, textvariable=self.scan).grid(row=4, column=1, sticky="w", **PAD)
+        ttk.Label(adv, text="Ignore these sources (scanners, admin hosts; IP or CIDR)").grid(
+            row=4, column=0, sticky="w", **PAD)
+        ttk.Entry(adv, textvariable=self.exclude).grid(row=4, column=1, columnspan=2, sticky="ew", **PAD)
+        ttk.Label(adv, text="Detection window (minutes)").grid(row=5, column=0, sticky="w", **PAD)
+        ttk.Spinbox(adv, from_=1, to=1440, width=6, textvariable=self.window).grid(row=5, column=1, sticky="w", **PAD)
 
         bar = ttk.Frame(root)
         bar.grid(row=4, column=0, columnspan=3, sticky="ew", **PAD)
@@ -135,8 +140,10 @@ class Launcher(tk.Tk):
 
     def _settings(self) -> Settings:
         try:
-            return Settings(self.internal.get().split() or DEFAULT_INTERNAL, int(self.scan.get()),
-                            int(self.stale.get()), float(self.offset.get()), self.tmap.get().strip())
+            return Settings(internal_networks=self.internal.get().split() or DEFAULT_INTERNAL,
+                            exclude_sources=self.exclude.get().split(), window_minutes=float(self.window.get()),
+                            stale_days=int(self.stale.get()), pan_utc_offset=float(self.offset.get()),
+                            threat_map=self.tmap.get().strip())
         except ValueError as e:
             raise InputError(f"check the options: {e}") from e
 
@@ -189,10 +196,11 @@ class Launcher(tk.Tk):
         self.report_btn.configure(state="normal")
         self.folder_btn.configure(state="normal")
         F = ctx["findings"]
-        unblocked = sum(1 for f in F if f["ips"]["not_blocked"])
+        logins = sum(1 for f in F if f["possible_login_success"])
+        srcs = sum(1 for x in ctx["hostile_sources"] if not x["routine_only"])
         self.summary.configure(
-            text=f"{len(F)} findings · {unblocked} unblocked IPS detections · {len(ctx['paths'])} attack paths · "
-                 f"{len(ctx['chains'])} same-host chains", foreground="#166534")
+            text=f"{len(F)} targeted services · {srcs} hostile sources · {logins} possible login successes · "
+                 f"{len(ctx['paths'])} attack paths", foreground="#166534")
         for n in ctx["notices"]:
             self._write("NOTE: " + n)
 

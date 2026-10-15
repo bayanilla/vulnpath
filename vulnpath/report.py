@@ -27,11 +27,15 @@ def write_json(path: Path, data) -> None:
     path.write_text(json.dumps(_iso(data), indent=2, sort_keys=False), encoding="utf-8")
 
 
+def _safe(row):
+    """Neutralise spreadsheet formula injection from untrusted log content."""
+    return [("'" + c) if isinstance(c, str) and c[:1] in "=+-@" else c for c in row]
+
+
 def write_csv(path: Path, findings: list[dict]) -> None:
-    cols = ["id", "priority_score", "activity", "outcome", "direction", "source_ip", "target_ip",
-            "target_hostname", "port", "protocol", "top_severity", "cves", "exploit_available",
-            "established", "attempts", "denied", "ips_not_blocked", "ips_blocked", "ips_signatures",
-            "ips_cves_matched", "pre_nat_destinations", "first_seen", "last_seen", "scan_stale", "assessment",
+    cols = ["id", "priority_score", "target_ip", "target_hostname", "port", "protocol", "top_severity", "cves",
+            "exploit_available", "behaviours", "possible_login_success", "outcome", "hostile_sources",
+            "external_sources", "first_seen", "last_seen", "chains", "scan_stale", "assessment", "score_reasons",
             "evidence"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -39,15 +43,26 @@ def write_csv(path: Path, findings: list[dict]) -> None:
         for x in findings:
             vs = x["vulnerabilities"]
             cves = sorted({c for v in vs for c in v["cves"]})
-            row = [x["id"], x["priority_score"], x["activity"], x["outcome"], x["direction"], x["source_ip"],
-                   x["target_ip"], x["target_hostname"], x["port"], x["protocol"], vs[0]["severity"],
-                   " ".join(cves), any(v["exploit_available"] for v in vs), x["traffic"]["established"],
-                   x["traffic"]["attempts"], x["traffic"]["denied"], x["ips"]["not_blocked"], x["ips"]["blocked"],
-                   " | ".join(x["ips"]["signatures"]), " ".join(x["ips"]["cves_matched"]),
-                   " ".join(x["traffic"]["pre_nat_destinations"]), ts(x["traffic"]["first_seen"]),
-                   ts(x["traffic"]["last_seen"]), x["scan_stale"], x["assessment"], " | ".join(x["evidence"])]
-            # Neutralise spreadsheet formula injection from untrusted log content.
-            w.writerow([("'" + c) if isinstance(c, str) and c[:1] in "=+-@" else c for c in row])
+            row = [x["id"], x["priority_score"], x["target_ip"], x["target_hostname"], x["port"], x["protocol"],
+                   vs[0]["severity"] if vs else "", " ".join(cves), any(v["exploit_available"] for v in vs),
+                   " ".join(x["kinds"]), x["possible_login_success"], x["outcome"], " ".join(x["hostile_sources"]),
+                   x["external_sources"], ts(x["first_seen"]), ts(x["last_seen"]), " | ".join(x["chains"]),
+                   x["scan_stale"], x["assessment"], " | ".join(x["score_reasons"]), " | ".join(x["evidence"])]
+            w.writerow(_safe(row))
+
+
+def write_sources_csv(path: Path, sources: list[dict]) -> None:
+    cols = ["source_ip", "external", "behaviours", "routine_only", "possible_login_success", "targets_contacted",
+            "vulnerable_targets", "finding_ids", "first_seen", "last_seen", "details"]
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(cols)
+        for x in sources:
+            row = [x["source_ip"], x["external"], " ".join(x["kinds"]), x["routine_only"],
+                   x["possible_login_success"], x["targets_contacted"], x["vulnerable_targets"],
+                   " ".join(x["finding_ids"]), ts(x["first_seen"]), ts(x["last_seen"]),
+                   " | ".join(d["detail"] for d in x["detections"])]
+            w.writerow(_safe(row))
 
 
 CSS = """
@@ -59,27 +74,48 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px
 th{background:#f9fafb}code{font-size:12px;background:#f3f4f6;padding:1px 4px;border-radius:4px;word-break:break-all}
 .sev-Critical{color:#b91c1c;font-weight:600}.sev-High{color:#ea580c;font-weight:600}.sev-Medium{color:#ca8a04}.sev-Low{color:#2563eb}
 .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:9px;background:#eef2ff;color:#3730a3;margin-right:4px}
+.tag.hot{background:#fee2e2;color:#991b1b}.tag.cred{background:#ffedd5;color:#9a3412}.tag.scan{background:#f3f4f6;color:#374151}
 .svgwrap{overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px}details{margin:4px 0}
 """
+
+MAX_HTML_FINDINGS = 1000
+MAX_HTML_SOURCES = 500
+KIND_TAG = {"ips-exploit": ("IPS exploit", "hot"), "auth-brute-force": ("failed logins", "cred"),
+            "ips-brute-force": ("IPS brute force", "cred"), "brute-force": ("brute force", "cred"),
+            "vertical-scan": ("port scan", "scan"), "horizontal-scan": ("sweep", "scan"),
+            "ips-scan": ("firewall scan", "scan")}
+
+
+def _tags(kinds, success=False) -> str:
+    out = "".join(f"<span class='tag {KIND_TAG[k][1]}'>{escape(KIND_TAG[k][0])}</span>" for k in kinds)
+    if success:
+        out += "<span class='tag hot'>possible login success</span>"
+    return out
 
 
 def write_html(path: Path, ctx: dict, svg: str) -> None:
     e = escape
-    F, P, C = ctx["findings"], ctx["paths"], ctx["chains"]
-    est = [f for f in F if f["outcome"] == "established"]
+    F, S, P, C = ctx["findings"], ctx["hostile_sources"], ctx["paths"], ctx["chains"]
+    live_src = [x for x in S if not x["routine_only"]]
     h = [f"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>VulnPath Report</title>"
          f"<meta name='viewport' content='width=device-width,initial-scale=1'><style>{CSS}{UI_CSS}</style></head><body>",
-         f"<h1>VulnPath report: vulnerability and traffic correlation</h1>",
+         "<h1>VulnPath report: which vulnerable services are being targeted</h1>",
          f"<div class='muted'>Case folder: <code>{e(ctx['case'])}</code> · generated {e(ctx['generated'])} · "
          f"VulnPath {e(ctx['version'])}</div>",
-         "<div class='box warn'><b>How to read this report.</b> Findings show traffic that reached services a "
-         "Nessus scan reported as vulnerable. Attack paths and chains are <b>hypotheses</b> for an analyst to "
-         "check. Nothing here confirms that a vulnerability was exploited.</div>",
+         "<div class='box warn'><b>How to read this report.</b> VulnPath first looks for hostile behaviour in the "
+         "traffic (scanning, brute force, firewall IPS detections), then checks which of the targets the Nessus "
+         "scan reports as vulnerable. Ordinary use of a vulnerable service is not a finding. Detections are leads "
+         "for an analyst; nothing here confirms that a vulnerability was exploited.</div>",
          "<h2>Summary</h2><div>"]
-    for label, val in [("Findings", len(F)), ("Established to vulnerable service", len(est)),
-                       ("IPS exploit detections not blocked", sum(1 for f in F if f["ips"]["not_blocked"])),
+    for label, val in [("Vulnerable services targeted", sum(1 for f in F if f["vulnerabilities"])),
+                       ("Login attacks on scanned hosts", sum(1 for f in F if not f["vulnerabilities"])),
+                       ("Possible login successes", sum(1 for f in F if f["possible_login_success"])),
+                       ("Unblocked IPS exploit detections", sum(1 for f in F for b in f["behaviours"]
+                                                                if b["kind"] == "ips-exploit" and b["not_blocked"])),
+                       ("Hostile sources", len(live_src)),
                        ("Candidate attack paths", len(P)), ("Same-host chains", len(C)),
-                       ("Connections analysed", ctx["traffic_total"]), ("Vulnerable services in scan", ctx["vuln_services"])]:
+                       ("Connections analysed", ctx["traffic_total"]),
+                       ("Login records analysed", ctx["auth_total"])]:
         h.append(f"<div class='kpi'><b>{val:,}</b>{e(label)}</div>")
     h.append("</div>")
     h.append(f"<p>Sources analysed: {', '.join(e(s) for s in ctx['sources']) or 'none'}. "
@@ -87,68 +123,108 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
     for msg in ctx["notices"]:
         h.append(f"<div class='box warn'>{e(msg)}</div>")
 
-    h.append("<h2>Attack-path diagram</h2><p class='muted js-only'>Click a host to focus the report on it. "
-             "Click a path or finding below to highlight it here.</p><div class='svgwrap' id='diagram'>" + svg + "</div>")
+    h.append("<h2>Hostile activity diagram</h2><p class='muted js-only'>Click a host to focus the report on it. "
+             "Click a finding, path or chain below to highlight it here.</p><div class='svgwrap' id='diagram'>"
+             + svg + "</div>")
 
-    # ---- Findings (interactive table) ----
-    sources = sorted({s for f in F for s in f["traffic"]["telemetry_sources"]})
-    h.append("<h2>Findings</h2>")
+    # ---- Findings: targeted services, ranked for remediation ----
+    h.append("<h2>Remediation priorities: targeted services</h2>"
+             "<p class='muted'>One row per service that drew hostile behaviour, ranked by how strong the behaviour "
+             "is and how serious the vulnerability is. Expand <b>why / evidence</b> for the scoring and log lines.</p>")
+    kinds_present = [k for k in KIND_TAG if any(k in f["kinds"] for f in F)]
     h.append("<div class='toolbar js-only' id='toolbar'>"
-             "<input type='search' id='q' placeholder='Search IP, host, CVE, signature…'>"
-             + _select("f-sev", "Severity", ["Critical", "High", "Medium", "Low"])
-             + _select("f-act", "Activity", ["exploit-attempt", "targeting", "probing"])
-             + _select("f-out", "Outcome", ["established", "attempted", "denied", "ips-only"])
-             + _select("f-src", "Telemetry", sources)
+             "<input type='search' id='q' placeholder='Search IP, host, CVE, behaviour…'>"
+             + _select("f-sev", "Severity", ["Critical", "High", "Medium", "Low", "none"])
+             + _select("f-kind", "Behaviour", kinds_present)
+             + _select("f-out", "Contact", ["contact", "no-contact"])
              + "<label><input type='checkbox' id='f-ext'> External sources only</label>"
+             "<label><input type='checkbox' id='f-ok'> Possible login success</label>"
              "<span id='hostchip' class='chip' hidden></span>"
              "<button id='reset'>Reset</button><button id='dl'>Download CSV (filtered)</button>"
              "<span id='count' class='muted'></span></div>")
+    if len(F) > MAX_HTML_FINDINGS:
+        h.append(f"<div class='box warn'>Showing the top {MAX_HTML_FINDINGS:,} of {len(F):,} findings. "
+                 "All of them are in findings.csv and findings.json.</div>")
     h.append("<table id='findings'><thead><tr><th data-k='id'>ID</th><th data-k='score' data-num='1'>Score</th>"
-             "<th data-k='activity'>Activity</th><th data-k='src'>Source → target</th><th data-k='port' data-num='1'>"
-             "Service</th><th data-k='sevrank' data-num='1'>Vulnerabilities</th><th>Traffic</th><th>Assessment</th>"
+             "<th data-k='dst'>Target</th><th data-k='port' data-num='1'>Service</th>"
+             "<th data-k='sevrank' data-num='1'>Vulnerabilities</th><th>Hostile behaviour</th><th>Assessment</th>"
              "</tr></thead><tbody>")
-    for f in F:
+    for f in F[:MAX_HTML_FINDINGS]:
         vs = f["vulnerabilities"]
         vtxt = "<br>".join(f"<span class='sev-{e(v['severity'])}'>{e(v['severity'])}</span> "
                            f"{e(', '.join(v['cves']) or v['name'])}" + (" · exploit public" if v["exploit_available"] else "")
-                           for v in vs[:4])
-        t = f["traffic"]
-        ips = f["ips"]
-        ips_txt = ""
-        if ips["exploit_detections"]:
-            ips_txt = (f"<br><b style='color:#dc2626'>IPS: {ips['not_blocked']} not blocked · {ips['blocked']} blocked"
-                       f"</b>")
-        nat_txt = f"<br><span class='muted'>via NAT {e(', '.join(t['pre_nat_destinations']))}</span>" \
-            if t["pre_nat_destinations"] else ""
+                           for v in vs[:4]) or "<span class='muted'>none on this port</span>"
+        if f["other_vulnerabilities_on_host"]:
+            vtxt += f"<br><span class='muted'>+{f['other_vulnerabilities_on_host']} on other ports or host-level</span>"
+        btxt = _tags(f["kinds"], f["possible_login_success"]) + "".join(
+            f"<div>{e(b['source_ip'])}{' (external)' if b['external'] else ''}: {e(b['detail'])}"
+            + (f" <b>{e(b['success_detail'])}</b>" if b["possible_success"] else "") + "</div>"
+            for b in f["behaviours"][:4])
+        more = len(f["behaviours"]) - 4 + f["behaviours_not_shown"]
+        if more > 0:
+            btxt += f"<div class='muted'>+{more} more in why / evidence</div>"
+        st = f["service_traffic"]
+        if st:
+            btxt += (f"<div class='muted'>All traffic to this service: {st['established']:,} established from "
+                     f"{st['distinct_sources']:,}{'+' if st['distinct_sources_capped'] else ''} source(s)</div>")
+        if f["pre_nat_destinations"]:
+            btxt += f"<div class='muted'>via NAT {e(', '.join(f['pre_nat_destinations']))}</div>"
         cves = " ".join(sorted({c for v in vs for c in v["cves"]}))
+        sev = vs[0]["severity"] if vs else "none"
         attrs = {
-            "id": f["id"], "score": f["priority_score"], "activity": f["activity"], "outcome": f["outcome"],
-            "src": f["source_ip"], "dst": f["target_ip"], "port": f["port"], "sev": vs[0]["severity"],
-            "sevrank": {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}.get(vs[0]["severity"], 0),
-            "ext": int(f["direction"] == "inbound-external"), "tele": " ".join(t["telemetry_sources"]),
-            "proto": f["protocol"], "host": f["target_hostname"], "cves": cves,
-            "assess": f["assessment"], "sig": " | ".join(ips["signatures"]),
-            "ipsn": ips["not_blocked"], "ipsb": ips["blocked"],
-            "est": t["established"], "att": t["attempts"], "den": t["denied"], "first": ts(t["first_seen"]),
+            "id": f["id"], "score": f["priority_score"], "dst": f["target_ip"], "port": f["port"],
+            "proto": f["protocol"], "host": f["target_hostname"], "sev": sev,
+            "sevrank": {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}.get(sev, 0),
+            "kinds": " ".join(f["kinds"]), "outcome": f["outcome"], "ext": int(f["external_sources"] > 0),
+            "ok": int(f["possible_login_success"]), "src": " ".join(f["hostile_sources"][:50]), "cves": cves,
+            "assess": f["assessment"], "first": ts(f["first_seen"]),
         }
         data = " ".join(f"data-{k}='{e(str(v), quote=True)}'" for k, v in attrs.items())
-        h.append(f"<tr class='frow' {data}><td>{e(f['id'])}</td><td>{f['priority_score']}</td><td>{e(f['activity'])}<br>"
-                 f"<span class='muted'>{e(f['outcome'])}</span></td><td>{e(f['source_ip'])} → <b>{e(f['target_ip'])}</b>"
-                 f"<br><span class='muted'>{e(f['target_hostname'])}</span></td><td>{e(f['protocol'])}/{f['port']}</td>"
-                 f"<td>{vtxt}</td><td>{t['established']} est · {t['attempts']} att · {t['denied']} denied{ips_txt}{nat_txt}"
-                 f"{_by_source(t)}<br>"
-                 f"<span class='muted'>{e(ts(t['first_seen']))}</span></td><td>{e(f['assessment'])}"
+        h.append(f"<tr class='frow' {data}><td>{e(f['id'])}</td><td>{f['priority_score']}</td>"
+                 f"<td><b>{e(f['target_ip'])}</b><br><span class='muted'>{e(f['target_hostname'])}</span></td>"
+                 f"<td>{e(f['protocol'])}/{f['port']}</td><td>{vtxt}</td><td>{btxt}"
+                 f"<div class='muted'>{e(ts(f['first_seen']))} to {e(ts(f['last_seen']))}</div></td>"
+                 f"<td>{e(f['assessment'])}"
+                 + (f"<br><b>Chain:</b> {e(', '.join(f['chains']))}" if f["chains"] else "")
                  + ("<br><b>Scan may be stale.</b>" if f["scan_stale"] else "")
                  + "<details><summary class='muted'>why / evidence</summary>"
                  + "".join(f"<div>• {e(r)}</div>" for r in f["score_reasons"])
-                 + "".join(f"<div>Signature: {e(sg)}</div>" for sg in ips["signatures"])
+                 + "".join(f"<div>{e(b['source_ip'])}: {e(b['label'])}: {e(b['detail'])}</div>"
+                           + "".join(f"<div>Signature: {e(sg)}</div>" for sg in b["signatures"])
+                           for b in f["behaviours"][4:])
                  + "".join(f"<div><code>{e(r)}</code></div>" for r in f["evidence"]) + "</details></td></tr>")
     h.append("</tbody></table><p id='nomatch' class='muted' hidden>No findings match the current filters.</p>")
 
+    # ---- Hostile sources ----
+    h.append("<h2>Hostile sources</h2><p class='muted'>Every source with at least one detection, including those "
+             "that only touched hosts without vulnerability data. Sources marked <i>routine</i> matched the "
+             "brute-force pattern but behave like many internal peers, so they produce no finding.</p>")
+    if not S:
+        h.append("<p class='muted'>No scanning, brute force or IPS detections were found.</p>")
+    else:
+        if len(S) > MAX_HTML_SOURCES:
+            h.append(f"<div class='box warn'>Showing {MAX_HTML_SOURCES:,} of {len(S):,} sources. "
+                     "All of them are in sources.csv.</div>")
+        h.append("<table id='sources'><thead><tr><th>Source</th><th>Behaviour</th><th>Targets</th>"
+                 "<th>Findings</th><th>Seen</th></tr></thead><tbody>")
+        for x in S[:MAX_HTML_SOURCES]:
+            kinds = _tags(x["kinds"], x["possible_login_success"]) or "<span class='tag scan'>routine</span>"
+            det = "".join(f"<div>{e(d['detail'])}" + (f" <i>({e(d['routine_reason'])})</i>" if d["routine"] else "")
+                          + "</div>" for d in x["detections"][:4])
+            h.append(f"<tr class='srow' data-src='{e(x['source_ip'], quote=True)}'><td><b>{e(x['source_ip'])}</b>"
+                     f"{'<br><span class=muted>external</span>' if x['external'] else ''}</td><td>{kinds}{det}</td>"
+                     f"<td>{x['targets_contacted']:,} contacted<br>{x['vulnerable_targets']} vulnerable</td>"
+                     f"<td>{e(' '.join(x['finding_ids'][:10]))}{' …' if len(x['finding_ids']) > 10 else ''}</td>"
+                     f"<td>{e(ts(x['first_seen']))}<br>{e(ts(x['last_seen']))}</td></tr>")
+        h.append("</tbody></table>")
+
     # ---- Attack paths ----
-    h.append("<h2>Candidate attack paths</h2>")
+    h.append("<h2>Candidate attack paths</h2><p class='muted'>A path starts at a hostile source that got through "
+             "(a login after failures, an unblocked IPS detection or an established session) and follows that "
+             "host's later connections to other vulnerable services.</p>")
     if not P:
-        h.append("<p class='muted'>No multi-step paths were found in observed, established traffic.</p>")
+        h.append("<p class='muted'>No hostile source got through to a host that then connected onward to another "
+                 "vulnerable service.</p>")
     for p in P:
         edges = " ".join(f"{hp['from']}>{hp['to']}" for hp in p["hops"])
         h.append(f"<div class='box pathbox' data-hosts='{e(' '.join(p['hosts']), quote=True)}' "
@@ -170,16 +246,16 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
     # ---- Same-host chains ----
     h.append("<h2>Same-host vulnerability chains</h2>")
     if not C:
-        h.append("<p class='muted'>No hosts matched a documented or generic chain.</p>")
+        h.append("<p class='muted'>No targeted host matched a published or inferred chain.</p>")
     for c in C:
-        tag = "Documented chain" if c["type"] == "documented" else "Generic chain (inferred)"
-        reached = "Entry point received established traffic." if c["entry_reached"] else \
-            "No established traffic to the entry point was observed."
+        tag = "Published chain" if c["type"] == "documented" else "Inferred chain"
+        reached = "Hostile activity reached this host." if c["entry_targeted"] else \
+            "No hostile activity against this host was observed."
         h.append(f"<div class='box chainbox' data-hosts='{e(c['host'], quote=True)}' data-edges=''>"
                  f"<b>{e(c['host'])}</b> {e(c['hostname'])} · <span class='tag'>{tag}</span>"
                  f"<b>{e(c['name'])}</b><br>{e(c['description'])}<ol>")
         for st in c["steps"]:
-            frm = f" · reached from {', '.join(st['reached_from'])}" if st["reached_from"] else ""
+            frm = f" · targeted by {', '.join(st['targeted_by'])}" if st["targeted_by"] else ""
             port = f"{st['protocol']}/{st['port']}" if st["port"] else "host-level"
             h.append(f"<li>{e(', '.join(st['cves']) or st['name'])} <span class='sev-{e(st['severity'])}'>"
                      f"{e(st['severity'])}</span> · {e(port)} · {e(st['stage_label'])}{e(frm)}</li>")
@@ -203,22 +279,16 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
              "<li>Asset matching is by IP address. Palo Alto inbound NAT is resolved to the internal address; DHCP "
              "changes and overlapping address ranges are not.</li>"
              "<li>Palo Alto timestamps carry no time zone and are read with the configured offset.</li>"
+             "<li>Behaviour is counted in fixed time windows; a slow scan spread over many windows can stay under "
+             "the thresholds.</li>"
+             "<li>Brute force from conn.log is a pattern. Zeek ssh.log, ntlm.log and kerberos.log, or a firewall "
+             "signature, are needed for login results.</li>"
              "<li>Chain detection uses CVSS access requirements and the known-chain list. It does not verify "
              "that one flaw provides the access the next one needs.</li>"
-             "<li>A connection to a vulnerable port shows reachability only. It does not show exploitation.</li>"
              "<li>Host-level vulnerabilities (port 0) are used only for chaining, never matched to traffic.</li>"
              "</ul>")
     h.append(f"<script>{UI_JS}</script></body></html>")
     path.write_text("\n".join(h), encoding="utf-8")
-
-
-def _by_source(t: dict) -> str:
-    """Per-sensor counts when more than one sensor saw the traffic (combined figure is the max, not the sum)."""
-    bs = t.get("by_source", {})
-    if len(bs) < 2:
-        return ""
-    parts = [f"{escape(k)} {v['established']}/{v['attempts']}/{v['denied']}" for k, v in bs.items()]
-    return f"<br><span class='muted' title='established/attempted/denied per sensor'>{' · '.join(parts)}</span>"
 
 
 def _select(id_, label, options) -> str:
@@ -249,18 +319,19 @@ var $=function(s){return document.querySelector(s)}, $$=function(s){return Array
 var rows=$$('tr.frow'), state={host:null};
 function txt(r){return Object.keys(r.dataset).map(function(k){return r.dataset[k]}).join(' ').toLowerCase()}
 function apply(){
-  var q=$('#q').value.trim().toLowerCase(), sev=$('#f-sev').value, act=$('#f-act').value,
-      out=$('#f-out').value, src=$('#f-src').value, ext=$('#f-ext').checked, n=0;
+  var q=$('#q').value.trim().toLowerCase(), sev=$('#f-sev').value, kind=$('#f-kind').value,
+      out=$('#f-out').value, ok=$('#f-ok').checked, ext=$('#f-ext').checked, n=0;
   rows.forEach(function(r){
-    var d=r.dataset, ok=(!q||txt(r).indexOf(q)>=0)&&(!sev||d.sev===sev)&&(!act||d.activity===act)&&
-      (!out||d.outcome===out)&&(!src||d.tele.split(' ').indexOf(src)>=0)&&(!ext||d.ext==='1')&&
-      (!state.host||d.src===state.host||d.dst===state.host);
-    r.hidden=!ok; if(ok)n++;
+    var d=r.dataset, show=(!q||txt(r).indexOf(q)>=0)&&(!sev||d.sev===sev)&&
+      (!kind||d.kinds.split(' ').indexOf(kind)>=0)&&(!out||d.outcome===out)&&(!ok||d.ok==='1')&&
+      (!ext||d.ext==='1')&&(!state.host||d.src.split(' ').indexOf(state.host)>=0||d.dst===state.host);
+    r.hidden=!show; if(show)n++;
   });
   $('#count').textContent='Showing '+n+' of '+rows.length;
   $('#nomatch').hidden=n>0;
   var chip=$('#hostchip');
   if(state.host){chip.hidden=false;chip.textContent='Host: '+state.host+'  ✕';}else chip.hidden=true;
+  $$('tr.srow').forEach(function(r){r.classList.toggle('dimbox',!!state.host&&r.dataset.src!==state.host);});
   $$('.pathbox,.chainbox').forEach(function(b){
     b.classList.toggle('dimbox',!!state.host&&b.dataset.hosts.split(' ').indexOf(state.host)<0);});
 }
@@ -299,12 +370,14 @@ rows.forEach(function(r){r.addEventListener('click',function(ev){
   if(ev.target.closest('details'))return;
   var was=r.classList.contains('sel'); clearSel();
   if(was){highlight(null);return;}
-  r.classList.add('sel'); highlight([r.dataset.src,r.dataset.dst],[r.dataset.src+'>'+r.dataset.dst]);
+  r.classList.add('sel');
+  var srcs=r.dataset.src?r.dataset.src.split(' '):[];
+  highlight(srcs.concat([r.dataset.dst]),srcs.map(function(s){return s+'>'+r.dataset.dst}));
 });});
-['#q','#f-sev','#f-act','#f-out','#f-src','#f-ext'].forEach(function(s){$(s).addEventListener('input',apply)});
+['#q','#f-sev','#f-kind','#f-out','#f-ok','#f-ext'].forEach(function(s){$(s).addEventListener('input',apply)});
 $('#reset').addEventListener('click',function(){
-  $('#q').value='';['#f-sev','#f-act','#f-out','#f-src'].forEach(function(s){$(s).value=''});
-  $('#f-ext').checked=false; state.host=null; clearSel(); highlight(null);
+  $('#q').value='';['#f-sev','#f-kind','#f-out'].forEach(function(s){$(s).value=''});
+  $('#f-ext').checked=false; $('#f-ok').checked=false; state.host=null; clearSel(); highlight(null);
   rows.sort(function(a,b){return a.dataset.id<b.dataset.id?-1:1}); rows.forEach(function(r){tbody.appendChild(r)});
   $$('#findings th').forEach(function(x){x.classList.remove('asc','desc')}); apply();});
 // sorting
@@ -318,7 +391,7 @@ $$('#findings th[data-k]').forEach(function(th){th.addEventListener('click',func
 });});
 // CSV of the visible rows
 $('#dl').addEventListener('click',function(){
-  var cols=['id','score','activity','outcome','src','dst','host','proto','port','sev','cves','ipsn','ipsb','sig','est','att','den','first','tele','assess'];
+  var cols=['id','score','dst','host','proto','port','sev','cves','kinds','ok','outcome','src','first','assess'];
   var esc=function(v){v=String(v==null?'':v); if(/^[=+\-@]/.test(v))v="'"+v; return '"'+v.replace(/"/g,'""')+'"'};
   var lines=[cols.join(',')];
   rows.filter(function(r){return !r.hidden}).forEach(function(r){lines.push(cols.map(function(c){return esc(r.dataset[c])}).join(','))});

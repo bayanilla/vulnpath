@@ -1,0 +1,137 @@
+<?xml version="1.0" ?>
+<NessusClientData_v2>
+<Report name="Quarterly internal scan">
+<ReportHost name="10.0.1.10"><HostProperties>
+<tag name="host-ip">10.0.1.10</tag>
+<tag name="host-fqdn">web01.corp.local</tag>
+<tag name="operating-system">Linux Kernel 5.4 on Ubuntu 20.04</tag>
+<tag name="HOST_START">Mon Jun  1 08:00:00 2026</tag>
+<tag name="HOST_END">Mon Jun  1 08:00:00 2026</tag>
+</HostProperties>
+<ReportItem port="443" svc_name="www" protocol="tcp" severity="3" pluginID="900101" pluginName="Apache HTTP Server 2.4.49 Path Traversal" pluginFamily="Synthetic">
+<cve>CVE-2021-41773</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N</cvss3_vector><cvss3_base_score>7.5</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>Apache HTTP Server 2.4.49 Path Traversal</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="22" svc_name="ssh" protocol="tcp" severity="3" pluginID="900102" pluginName="OpenSSH &lt; 9.8p1 Signal Handler Race (regreSSHion)" pluginFamily="Synthetic">
+<cve>CVE-2024-6387</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>8.1</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<synopsis>OpenSSH &lt; 9.8p1 Signal Handler Race (regreSSHion)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="3" pluginID="900103" pluginName="Ubuntu polkit pkexec Local Privilege Escalation (PwnKit)" pluginFamily="Synthetic">
+<cve>CVE-2021-4034</cve>
+<cvss3_vector>CVSS:3.0/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>7.8</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>Ubuntu polkit pkexec Local Privilege Escalation (PwnKit)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="8080" svc_name="www" protocol="tcp" severity="4" pluginID="900104" pluginName="Apache Struts RCE (fixed before Q4)" pluginFamily="Synthetic">
+<cve>CVE-2017-5638</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>10.0</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>Apache Struts RCE (fixed before Q4)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information"><plugin_output>info</plugin_output></ReportItem>
+</ReportHost>
+<ReportHost name="10.0.1.15"><HostProperties>
+<tag name="host-ip">10.0.1.15</tag>
+<tag name="host-fqdn">mail01.corp.local</tag>
+<tag name="operating-system">Microsoft Windows Server 2016</tag>
+<tag name="HOST_START">Mon Jun  1 08:00:00 2026</tag>
+<tag name="HOST_END">Mon Jun  1 08:00:00 2026</tag>
+</HostProperties>
+<ReportItem port="443" svc_name="www" protocol="tcp" severity="4" pluginID="900201" pluginName="Microsoft Exchange Server RCE (ProxyShell, part 1)" pluginFamily="Synthetic">
+<cve>CVE-2021-34473</cve>
+<cve>CVE-2021-34523</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>9.8</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>Microsoft Exchange Server RCE (ProxyShell, part 1)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="443" svc_name="www" protocol="tcp" severity="3" pluginID="900202" pluginName="Microsoft Exchange Server Security Feature Bypass (ProxyShell, part 2)" pluginFamily="Synthetic">
+<cve>CVE-2021-31207</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>7.2</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<synopsis>Microsoft Exchange Server Security Feature Bypass (ProxyShell, part 2)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information"><plugin_output>info</plugin_output></ReportItem>
+</ReportHost>
+<ReportHost name="10.0.2.20"><HostProperties>
+<tag name="host-ip">10.0.2.20</tag>
+<tag name="host-fqdn">app02.corp.local</tag>
+<tag name="operating-system">Microsoft Windows Server 2012 R2</tag>
+<tag name="HOST_START">Mon Jun  1 08:00:00 2026</tag>
+<tag name="HOST_END">Mon Jun  1 08:00:00 2026</tag>
+</HostProperties>
+<ReportItem port="445" svc_name="cifs" protocol="tcp" severity="3" pluginID="900301" pluginName="MS17-010: Security Update for Microsoft Windows SMB Server" pluginFamily="Synthetic">
+<cve>CVE-2017-0144</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>8.1</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>MS17-010: Security Update for Microsoft Windows SMB Server</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information"><plugin_output>info</plugin_output></ReportItem>
+</ReportHost>
+<ReportHost name="10.0.2.30"><HostProperties>
+<tag name="host-ip">10.0.2.30</tag>
+<tag name="host-fqdn">db01.corp.local</tag>
+<tag name="operating-system">Microsoft Windows Server 2012 R2</tag>
+<tag name="HOST_START">Mon Jun  1 08:00:00 2026</tag>
+<tag name="HOST_END">Mon Jun  1 08:00:00 2026</tag>
+</HostProperties>
+<ReportItem port="445" svc_name="cifs" protocol="tcp" severity="3" pluginID="900301" pluginName="MS17-010: Security Update for Microsoft Windows SMB Server" pluginFamily="Synthetic">
+<cve>CVE-2017-0144</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>8.1</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>MS17-010: Security Update for Microsoft Windows SMB Server</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information"><plugin_output>info</plugin_output></ReportItem>
+</ReportHost>
+<ReportHost name="10.0.1.30"><HostProperties>
+<tag name="host-ip">10.0.1.30</tag>
+<tag name="host-fqdn">portal.corp.local</tag>
+<tag name="operating-system">Linux Kernel 4.18 on Red Hat 8</tag>
+<tag name="HOST_START">Mon Jun  1 08:00:00 2026</tag>
+<tag name="HOST_END">Mon Jun  1 08:00:00 2026</tag>
+</HostProperties>
+<ReportItem port="8009" svc_name="ajp13" protocol="tcp" severity="4" pluginID="900401" pluginName="Apache Tomcat AJP File Read/Inclusion (Ghostcat)" pluginFamily="Synthetic">
+<cve>CVE-2020-1938</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>9.8</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>Apache Tomcat AJP File Read/Inclusion (Ghostcat)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information"><plugin_output>info</plugin_output></ReportItem>
+</ReportHost>
+<ReportHost name="10.0.1.40"><HostProperties>
+<tag name="host-ip">10.0.1.40</tag>
+<tag name="host-fqdn">rdp01.corp.local</tag>
+<tag name="operating-system">Microsoft Windows Server 2008 R2</tag>
+<tag name="HOST_START">Mon Jun  1 08:00:00 2026</tag>
+<tag name="HOST_END">Mon Jun  1 08:00:00 2026</tag>
+</HostProperties>
+<ReportItem port="3389" svc_name="msrdp" protocol="tcp" severity="4" pluginID="900501" pluginName="Microsoft RDP RCE (BlueKeep)" pluginFamily="Synthetic">
+<cve>CVE-2019-0708</cve>
+<cvss3_vector>CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</cvss3_vector><cvss3_base_score>9.8</cvss3_base_score>
+<exploit_available>true</exploit_available>
+<exploitability_ease>Exploits are available</exploitability_ease>
+<exploit_framework_metasploit>true</exploit_framework_metasploit>
+<synopsis>Microsoft RDP RCE (BlueKeep)</synopsis><solution>Apply the vendor update.</solution>
+</ReportItem>
+<ReportItem port="0" svc_name="general" protocol="tcp" severity="0" pluginID="19506" pluginName="Nessus Scan Information"><plugin_output>info</plugin_output></ReportItem>
+</ReportHost>
+</Report></NessusClientData_v2>
