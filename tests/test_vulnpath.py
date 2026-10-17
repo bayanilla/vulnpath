@@ -1,5 +1,6 @@
 """Tests run with the standard library only:  python -m unittest discover -s tests -v"""
 import csv
+import ipaddress
 import json
 import random
 import shutil
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "samples"))
 
 import make_demo_case  # noqa: E402
+from vulnpath.behavior import KIND_LABEL  # noqa: E402
 from vulnpath.chains import is_rollup, stage  # noqa: E402
 from vulnpath.correlate import Settings  # noqa: E402
 from vulnpath.detect import detect  # noqa: E402
@@ -21,7 +23,8 @@ from vulnpath.diagram import render  # noqa: E402
 from vulnpath.evidence import EvidenceFile, inventory, sha256_file  # noqa: E402
 from vulnpath.model import Vulnerability  # noqa: E402
 from vulnpath.parsers import nessus, paloalto, zeek  # noqa: E402
-from vulnpath.pipeline import InputError, run  # noqa: E402
+from vulnpath import intel  # noqa: E402
+from vulnpath.pipeline import DEFAULT_INTEL, InputError, run  # noqa: E402
 from vulnpath.report import write_csv  # noqa: E402
 
 
@@ -30,7 +33,8 @@ THREAT_MAP = str(ROOT / "samples" / "demo_threat_map.csv")
 
 def DEMO_SETTINGS(**kw):
     kw.setdefault("exclude_sources", [make_demo_case.NESSUS_SCANNER])
-    return Settings(threat_map=THREAT_MAP, **kw)
+    kw.setdefault("threat_map", THREAT_MAP)
+    return Settings(**kw)
 
 
 def quiet(*_):
@@ -493,11 +497,110 @@ class Units(unittest.TestCase):
              "port": 1, "protocol": "tcp", "vulnerabilities": [], "kinds": [], "possible_login_success": False,
              "outcome": "no-contact", "hostile_sources": [], "external_sources": 0, "first_seen": 0,
              "last_seen": 0, "chains": [], "scan_stale": False, "assessment": "", "score_reasons": [],
-             "evidence": []}
+             "evidence": [], "attack_techniques": [], "threat_intel": []}
         write_csv(self.tmp / "x.csv", [f])
         with open(self.tmp / "x.csv", newline="", encoding="utf-8") as fh:
             rows = list(csv.reader(fh))
         self.assertTrue(rows[1][3].startswith("'="))
+
+
+class ThreatIntel(unittest.TestCase):
+    """ATT&CK tags on every detection, and matches against rules/threat_intel.json."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp())
+        cls.case = make_demo_case.build(cls.tmp / "case")
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp)
+
+    def run_with(self, reports, name, **kw):
+        path = self.tmp / f"{name}.json"
+        path.write_text(json.dumps({"reports": reports}), encoding="utf-8")
+        ctx = run(self.case, self.tmp / name, DEMO_SETTINGS(**kw), intel_path=path, log=quiet)
+        return {(f["target_ip"], f["port"]): f for f in ctx["findings"]}
+
+    @staticmethod
+    def report(**kw):
+        r = {"id": "test-report", "title": "Test report", "publisher": "Test vendor", "published": "2026-10-01",
+             "url": "https://example.com/report"}
+        r.update(kw)
+        return r
+
+    def test_rules_file_is_valid(self):
+        reports = intel.load(DEFAULT_INTEL)
+        self.assertTrue(reports)
+        self.assertEqual(len({r["id"] for r in reports}), len(reports))
+        for r in reports:
+            time.strptime(r["published"], "%Y-%m-%d")
+            self.assertTrue(r["url"].startswith("https://"), r["id"])
+            for rule in r.get("rules", []):
+                self.assertIn(rule["technique"], intel.TECHNIQUES, r["id"])
+                self.assertLessEqual(set(rule["kinds"]), set(KIND_LABEL), r["id"])
+                for c in rule.get("cves", []):
+                    self.assertRegex(c, r"^CVE-\d{4}-\d{4,}$")
+            for ip in r.get("source_ips", []):
+                ipaddress.ip_address(ip)
+
+    def test_malformed_rule_is_rejected(self):
+        path = self.tmp / "bad.json"
+        path.write_text(json.dumps({"reports": [self.report(rules=[{"kinds": ["vertical-scan"], "port": 22}])]}))
+        with self.assertRaises(ValueError):
+            intel.load(path)
+
+    def test_attack_techniques_on_demo(self):
+        F = self.run_with([], "none")
+        self.assertIn("T1110.001 Password Guessing", F[("10.0.1.10", 22)]["attack_techniques"])
+        self.assertIn("T1078 Valid Accounts", F[("10.0.1.10", 22)]["attack_techniques"])
+        self.assertIn("T1110.003 Password Spraying", F[("10.0.2.20", 445)]["attack_techniques"])
+        self.assertIn("T1595.001 Scanning IP Blocks", F[("10.0.1.10", 443)]["attack_techniques"])
+        self.assertIn("T1190 Exploit Public-Facing Application", F[("10.0.1.10", 443)]["attack_techniques"])
+        self.assertEqual(F[("10.0.1.10", 443)]["threat_intel"], [])
+
+    def test_port_only_rule_is_context(self):
+        base = self.run_with([], "base")
+        rule = {"kinds": ["horizontal-scan"], "external_only": True, "ports": [443], "technique": "T1595.002",
+                "why": "sweeps of HTTPS"}
+        F = self.run_with([self.report(rules=[rule])], "ports")
+        f = F[("10.0.1.10", 443)]
+        [hit] = f["threat_intel"]
+        self.assertFalse(hit["targeted"])
+        self.assertIn("T1595.002 Vulnerability Scanning", f["attack_techniques"])
+        self.assertEqual(f["priority_score"], base[("10.0.1.10", 443)]["priority_score"])
+        self.assertEqual(F[("10.0.1.10", 22)]["threat_intel"], [])
+
+    def test_cve_rule_raises_priority(self):
+        base = self.run_with([], "base2")
+        rule = {"kinds": ["ips-exploit"], "cves": ["CVE-2021-41773"], "technique": "T1190", "why": "exploited"}
+        F = self.run_with([self.report(rules=[rule])], "cve")
+        f = F[("10.0.1.10", 443)]
+        self.assertTrue(f["threat_intel"][0]["targeted"])
+        self.assertIn("CVE-2021-41773", f["threat_intel"][0]["why"])
+        self.assertEqual(f["priority_score"], base[("10.0.1.10", 443)]["priority_score"] + 10)
+        self.assertTrue(any("recent threat report" in r for r in f["score_reasons"]))
+
+    def test_product_rule_needs_the_product_on_the_host(self):
+        rule = {"kinds": ["horizontal-scan"], "products": ["Apache HTTP Server"], "technique": "T1595",
+                "why": "scanning for Apache"}
+        F = self.run_with([self.report(rules=[rule])], "product")
+        self.assertTrue(F[("10.0.1.10", 443)]["threat_intel"][0]["targeted"])
+        rule["products"] = ["NetScaler"]
+        F = self.run_with([self.report(rules=[rule])], "product2")
+        self.assertEqual(F[("10.0.1.10", 443)]["threat_intel"], [])
+
+    def test_listed_source_address(self):
+        F = self.run_with([self.report(source_ips=["203.0.113.120"])], "ioc")
+        f = F[("10.0.1.10", 22)]
+        self.assertIsNone(f["threat_intel"][0]["technique"])
+        self.assertTrue(any("actor infrastructure" in r for r in f["score_reasons"]))
+        self.assertIn("Threat intel:", (self.tmp / "ioc" / "report.html").read_text(encoding="utf-8"))
+
+    def test_report_threat_ids_map_signatures_to_cves(self):
+        F = self.run_with([self.report(threat_ids={"95001": ["CVE-2021-41773"]})], "tids", threat_map="")
+        self.assertTrue(any("IPS signature for the scanned CVE CVE-2021-41773" in r
+                            for r in F[("10.0.1.10", 443)]["score_reasons"]))
 
 
 if __name__ == "__main__":

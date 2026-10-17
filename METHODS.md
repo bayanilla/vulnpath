@@ -95,9 +95,14 @@ finding lists its reasons in the report.
 | No session completed, no login succeeded and no IPS detection got through | −10 |
 | The host matches a published chain | +15 |
 | The service is the entry point of an inferred chain | +10 |
+| A recent threat report's TTP matches this kind of target (listed CVE or product on the host) | +10 |
+| A hostile source is listed as actor infrastructure in a threat report | +10 |
 | Scan more than `--stale-days` from the activity | −10 |
 
 The score orders the work; it is not a probability or a confidence level.
+
+Every detection and finding also carries its MITRE ATT&CK techniques. Threat reports
+and their rules are described in [INTEL.md](INTEL.md).
 
 ## Candidate attack paths
 

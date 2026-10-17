@@ -75,6 +75,7 @@ behave realistically.
 | `--threat-map CSV` | none | Supply a `threat_id,cve` list so IPS signatures can be matched to Nessus CVEs. |
 | `--stale-days N` | `30` | Flag findings where the scan and the activity are more than N days apart. |
 | `--rules FILE` | `rules/known_chains.json` | Use a different list of published exploit chains. |
+| `--intel FILE` | `rules/threat_intel.json` | Use a different list of threat-intelligence reports. |
 
 The launcher window offers the most common options: internal networks, sources to
 ignore, the detection window, the Palo Alto time zone, the threat map and the stale-scan
@@ -218,4 +219,6 @@ and reports contain internal addresses, hostnames and vulnerability details.
 
 - [Methods and decision rules](METHODS.md): how behaviour is detected, matched to the
   scan and scored, how paths and chains are built, and how to add a published chain.
+- [Threat intelligence rules](INTEL.md): ATT&CK techniques, recent threat reports and
+  the weekly update that adds them.
 - [Development and verification](DEVELOPMENT.md): code layout, tests and the demo case.

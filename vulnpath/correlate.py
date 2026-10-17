@@ -10,6 +10,7 @@ import ipaddress
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from . import intel as ttp
 from .behavior import CREDENTIAL_KINDS, KIND_LABEL, Behaviour, Detection
 from .model import Connection, HostInfo, Vulnerability
 
@@ -262,8 +263,10 @@ def targets_of(d: Detection, index: dict, hosts: dict) -> list[tuple]:
     return out
 
 
-def build_findings(col: Collector, settings: Settings, chains: list[dict]) -> list[dict]:
+def build_findings(col: Collector, settings: Settings, chains: list[dict],
+                   intel: ttp.Intel | None = None) -> list[dict]:
     index, hosts, touches = col.index, col.hosts, col.touches
+    intel = intel or ttp.Intel([])
     groups: dict[tuple, list[Detection]] = {}
     for d in col.detections:
         if d.routine:
@@ -375,6 +378,20 @@ def build_findings(col: Collector, settings: Settings, chains: list[dict]) -> li
                 reasons.append("this service is the entry point of an inferred same-host chain (+10)")
                 chain_names.append(c["name"])
 
+        hv = host_vulns.get(dst, [])
+        host_cves = {c for v in hv for c in v.cves}
+        products = " ".join(v.plugin_name for v in hv).lower()
+        intel_hits = [h for d in dets for h in intel.match(d, not settings.is_internal(d.src), port, host_cves, products)]
+        intel_hits = list({(h["report"], h["technique"], h["why"]): h for h in intel_hits}.values())
+        if any(h["targeted"] and h["technique"] for h in intel_hits):
+            score += 10
+            reasons.append("matches a recent threat report's TTP against this kind of target (+10)")
+        if any(h["technique"] is None for h in intel_hits):
+            score += 10
+            reasons.append("a hostile source is listed as actor infrastructure in a threat report (+10)")
+        techniques = sorted({t for d in dets for t in ttp.baseline(d, not settings.is_internal(d.src))}
+                            | {h["technique"] for h in intel_hits if h["technique"]})
+
         info = hosts.get(dst)
         stale = False
         if info and info.scan_time is not None:
@@ -409,6 +426,8 @@ def build_findings(col: Collector, settings: Settings, chains: list[dict]) -> li
             "pre_nat_destinations": sorted({p for s in srcs for p in (touches[(s, dst, port, proto)].pre_nat
                                             if (s, dst, port, proto) in touches else ())}),
             "chains": chain_names,
+            "attack_techniques": [ttp.name(t) for t in techniques],
+            "threat_intel": intel_hits,
             "scan_stale": stale,
             "assessment": _assessment(dets, vs, success, contact_est, unblocked_ips),
             "score_reasons": reasons,
@@ -461,6 +480,7 @@ def _evidence(dets, vs) -> list[str]:
 def _det_dict(d: Detection, settings: Settings) -> dict:
     return {
         "kind": d.kind, "label": d.label, "source_ip": d.src, "external": not settings.is_internal(d.src),
+        "attack": [ttp.name(t) for t in ttp.baseline(d, not settings.is_internal(d.src))],
         "first_seen": d.first, "last_seen": d.last, "windows": d.windows,
         "attempts": d.attempts, "failed": d.failed, "targets": d.n_targets,
         "detail": d.detail, "possible_success": d.success, "success_detail": d.success_detail,

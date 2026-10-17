@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__
+from . import __version__, intel
 from .chains import attack_paths, load_known_chains, same_host_chains
 from .correlate import Settings, build_findings, build_sources, correlate, targets_of
 from .detect import detect
@@ -17,6 +17,7 @@ from .report import ts, write_csv, write_html, write_json, write_sources_csv
 ZEEK_TYPES = {"zeek_conn": "conn", "zeek_ssh": "ssh", "zeek_ntlm": "ntlm", "zeek_kerberos": "kerberos"}
 TRAFFIC_TYPES = set(ZEEK_TYPES) | {"paloalto"}
 DEFAULT_RULES = Path(__file__).resolve().parent.parent / "rules" / "known_chains.json"
+DEFAULT_INTEL = DEFAULT_RULES.with_name("threat_intel.json")
 
 
 class InputError(Exception):
@@ -58,7 +59,7 @@ def load_scans(nessus_files, notices: list[str], step) -> tuple[dict, list, list
 
 
 def run(case_dir: Path, out_dir: Path, settings: Settings | None = None,
-        rules_path: Path = DEFAULT_RULES, log=print) -> dict:
+        rules_path: Path = DEFAULT_RULES, intel_path: Path = DEFAULT_INTEL, log=print) -> dict:
     settings = settings or Settings()
     case_dir, out_dir = case_dir.resolve(), out_dir.resolve()
     if not case_dir.is_dir():
@@ -95,9 +96,14 @@ def run(case_dir: Path, out_dir: Path, settings: Settings | None = None,
     hosts, vulns, scan_coverage = load_scans(nessus_files, notices, step)
     step(f"{len(vulns)} vulnerability result(s) (severity Low+) on {len(hosts)} host(s)")
 
-    threat_map = paloalto.load_threat_map(Path(settings.threat_map)) if settings.threat_map else {}
-    if settings.threat_map and not threat_map:
+    reports = intel.load(intel_path)
+    user_map = paloalto.load_threat_map(Path(settings.threat_map)) if settings.threat_map else {}
+    if settings.threat_map and not user_map:
         notices.append(f"Threat map {settings.threat_map} was empty or not found; IPS signatures are matched by port only.")
+    threat_map = intel.threat_ids(reports)
+    for tid, cves in user_map.items():
+        threat_map[tid] = sorted(set(threat_map.get(tid, [])) | set(cves))
+    step(f"{len(reports)} threat-intelligence report(s) loaded from {intel_path.name}")
 
     def all_records():
         for ef in traffic_files:
@@ -119,7 +125,7 @@ def run(case_dir: Path, out_dir: Path, settings: Settings | None = None,
             targeted.setdefault(t, []).append(d)
     known = load_known_chains(rules_path)
     chains = same_host_chains(vulns, known, targeted)
-    findings = build_findings(col, settings, chains)
+    findings = build_findings(col, settings, chains, intel.Intel(reports))
     sources = build_sources(col, settings, findings)
     paths = attack_paths(col, settings, chains)
     step(f"{len(findings)} targeted service(s), {len(sources)} source(s) with detections, "

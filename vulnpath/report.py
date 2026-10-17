@@ -36,7 +36,7 @@ def write_csv(path: Path, findings: list[dict]) -> None:
     cols = ["id", "priority_score", "target_ip", "target_hostname", "port", "protocol", "top_severity", "cves",
             "exploit_available", "behaviours", "possible_login_success", "outcome", "hostile_sources",
             "external_sources", "first_seen", "last_seen", "chains", "scan_stale", "assessment", "score_reasons",
-            "evidence"]
+            "evidence", "attack_techniques", "threat_intel"]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(cols)
@@ -47,7 +47,9 @@ def write_csv(path: Path, findings: list[dict]) -> None:
                    vs[0]["severity"] if vs else "", " ".join(cves), any(v["exploit_available"] for v in vs),
                    " ".join(x["kinds"]), x["possible_login_success"], x["outcome"], " ".join(x["hostile_sources"]),
                    x["external_sources"], ts(x["first_seen"]), ts(x["last_seen"]), " | ".join(x["chains"]),
-                   x["scan_stale"], x["assessment"], " | ".join(x["score_reasons"]), " | ".join(x["evidence"])]
+                   x["scan_stale"], x["assessment"], " | ".join(x["score_reasons"]), " | ".join(x["evidence"]),
+                   " | ".join(x["attack_techniques"]),
+                   " | ".join(f"{t['publisher']} {t['published']}: {t['why']} {t['url']}" for t in x["threat_intel"])]
             w.writerow(_safe(row))
 
 
@@ -221,7 +223,7 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
              "is and how serious the vulnerability is. Expand <b>why / evidence</b> for the scoring and log lines.</p>")
     kinds_present = [k for k in KIND_TAG if any(k in f["kinds"] for f in F)]
     h.append("<div class='toolbar js-only' id='toolbar'>"
-             "<input type='search' id='q' placeholder='Search IP, host, CVE, behaviour…'>"
+             "<input type='search' id='q' placeholder='Search IP, host, CVE, ATT&amp;CK ID, behaviour…'>"
              + _select("f-sev", "Severity", ["Critical", "High", "Medium", "Low", "none"])
              + _select("f-kind", "Behaviour", kinds_present)
              + _select("f-out", "Contact", ["contact", "no-contact"])
@@ -266,6 +268,7 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
             "kinds": " ".join(f["kinds"]), "outcome": f["outcome"], "ext": int(f["external_sources"] > 0),
             "ok": int(f["possible_login_success"]), "src": " ".join(f["hostile_sources"][:50]), "cves": cves,
             "assess": f["assessment"], "first": ts(f["first_seen"]),
+            "ttp": " ".join(t.split()[0] for t in f["attack_techniques"]),
         }
         data = " ".join(f"data-{k}='{e(str(v), quote=True)}'" for k, v in attrs.items())
         h.append(f"<tr class='frow' {data}><td>{e(f['id'])}</td><td>{f['priority_score']}</td>"
@@ -275,7 +278,11 @@ def write_html(path: Path, ctx: dict, svg: str) -> None:
                  f"<td>{e(f['assessment'])}"
                  + (f"<br><b>Chain:</b> {e(', '.join(f['chains']))}" if f["chains"] else "")
                  + ("<br><b>Scan may be stale.</b>" if f["scan_stale"] else "")
+                 + "".join(f"<br><b>Threat intel:</b> <a href='{e(t['url'], quote=True)}' rel='noreferrer'>"
+                           f"{e(t['publisher'])}, {e(t['published'])}</a>: {e(t['why'])}"
+                           for t in f["threat_intel"][:3])
                  + "<details><summary class='muted'>why / evidence</summary>"
+                 + f"<div>ATT&amp;CK: {e(', '.join(f['attack_techniques']))}</div>"
                  + "".join(f"<div>• {e(r)}</div>" for r in f["score_reasons"])
                  + "".join(f"<div>{e(b['source_ip'])}: {e(b['label'])}: {e(b['detail'])}</div>"
                            + "".join(f"<div>Signature: {e(sg)}</div>" for sg in b["signatures"])

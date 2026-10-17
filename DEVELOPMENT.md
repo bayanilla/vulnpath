@@ -17,7 +17,9 @@
 | `vulnpath/diagram.py` | Pure-Python SVG diagram. |
 | `vulnpath/report.py` | HTML, CSV and JSON output, including the report's interactive script. |
 | `vulnpath/pipeline.py` | Runs the steps end to end. Used by both the command line and the launcher. |
+| `vulnpath/intel.py` | ATT&CK techniques per detection and matches against threat reports. |
 | `rules/known_chains.json` | Published exploit chains. |
+| `rules/threat_intel.json` | Recent threat reports and the detectable TTPs in them (see INTEL.md). |
 | `samples/` | Synthetic demo case, its generator and a demo threat map. |
 
 The analysis engine does not depend on where files come from or where results go, so

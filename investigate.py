@@ -12,7 +12,7 @@ if sys.version_info < (3, 9):
     sys.exit("Python 3.9 or newer is required.")
 
 from vulnpath.correlate import DEFAULT_INTERNAL, Settings  # noqa: E402
-from vulnpath.pipeline import DEFAULT_RULES, InputError, run  # noqa: E402
+from vulnpath.pipeline import DEFAULT_INTEL, DEFAULT_RULES, InputError, run  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -42,6 +42,7 @@ def main(argv=None) -> int:
     ap.add_argument("--threat-map", default="", metavar="CSV",
                     help="optional CSV (threat_id,cve) mapping Palo Alto threat IDs to CVEs")
     ap.add_argument("--rules", type=Path, default=DEFAULT_RULES, help="known vulnerability chains JSON")
+    ap.add_argument("--intel", type=Path, default=DEFAULT_INTEL, help="threat-intelligence reports JSON")
     a = ap.parse_args(argv)
     try:
         settings = Settings(internal_networks=a.internal, exclude_sources=a.exclude_sources,
@@ -53,7 +54,7 @@ def main(argv=None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     try:
-        run(a.input, a.output, settings, a.rules)
+        run(a.input, a.output, settings, a.rules, a.intel)
     except InputError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

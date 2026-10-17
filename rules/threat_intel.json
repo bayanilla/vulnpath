@@ -1,0 +1,103 @@
+{
+  "_about": "Threat-intelligence reports that VulnPath matches against its detections. See INTEL.md for the format and for how entries are added. Only behaviour visible in Zeek, Palo Alto and Nessus data belongs here. Source addresses age quickly; treat a match as a lead.",
+  "reports": [
+    {
+      "id": "cisa-aa26-281a",
+      "title": "Chinese Government-linked Cyber Threat Actors Combine Automated and Hands-on Hacking Tools to Steal Sensitive Data",
+      "publisher": "CISA, FBI, NSA and international partners (AA26-281A)",
+      "published": "2026-10-08",
+      "url": "https://www.cisa.gov/news-events/cybersecurity-advisories/aa26-281a",
+      "actors": ["Integrity Technology Group-enabled actors", "Flax Typhoon", "Ethereal Panda", "Red Juliett"],
+      "techniques": ["T1595.002", "T1190", "T1133", "T1110.001", "T1110.003"],
+      "rules": [
+        {
+          "kinds": ["horizontal-scan", "vertical-scan", "ips-scan"],
+          "external_only": true,
+          "ports": [21, 22, 53, 80, 443, 1080],
+          "technique": "T1595.002",
+          "why": "internet scanning of FTP, SSH, DNS, HTTP, HTTPS and SOCKS ports, the port set the advisory says these actors focus on (masscan, Fscan, NMAP)"
+        },
+        {
+          "kinds": ["ips-exploit", "horizontal-scan", "vertical-scan", "ips-scan"],
+          "cves": ["CVE-2014-6278", "CVE-2015-3306", "CVE-2015-5477", "CVE-2016-3081", "CVE-2019-11510",
+                   "CVE-2021-22205", "CVE-2021-3199", "CVE-2023-22894"],
+          "technique": "T1190",
+          "why": "the target carries a CVE named in the advisory's affected products"
+        }
+      ]
+    },
+    {
+      "id": "fbi-usss-fortibleed-2026-10",
+      "title": "FortiBleed Operations Continue Targeting Exposed Fortinet Devices",
+      "publisher": "FBI and U.S. Secret Service (JCSA-20261006-01)",
+      "published": "2026-10-06",
+      "url": "https://www.ic3.gov/CSA/2026/261006.pdf",
+      "actors": ["FortiBleed initial access brokers", "INC/Lynx and Payload ransomware affiliates"],
+      "techniques": ["T1595", "T1110.003", "T1110.004", "T1078"],
+      "rules": [
+        {
+          "kinds": ["auth-brute-force", "ips-brute-force", "brute-force"],
+          "products": ["FortiOS", "FortiGate", "Fortinet"],
+          "technique": "T1110.003",
+          "why": "password spraying and credential stuffing against FortiGate SSL VPN and management logins"
+        },
+        {
+          "kinds": ["horizontal-scan", "vertical-scan", "ips-scan"],
+          "external_only": true,
+          "products": ["FortiOS", "FortiGate", "Fortinet"],
+          "technique": "T1595",
+          "why": "automated internet scanning for exposed FortiGate SSL VPN portals, which precedes the login attacks"
+        }
+      ],
+      "source_ips": ["45.154.12.132", "154.202.59.169", "103.27.186.156", "45.155.250.158",
+                     "193.8.187.2", "193.8.187.42", "85.11.187.8"]
+    },
+    {
+      "id": "unit42-netscaler-cve-2026-88771",
+      "title": "Threat Brief: NetScaler Zero Days CVE-2026-88771 and CVE-2026-88772 Exploited in the Wild",
+      "publisher": "Palo Alto Networks Unit 42",
+      "published": "2026-09-30",
+      "url": "https://unit42.paloaltonetworks.com/netscaler-zero-days-exploited/",
+      "actors": ["unattributed"],
+      "techniques": ["T1595.002", "T1190"],
+      "threat_ids": {"97562": ["CVE-2026-88771"]},
+      "rules": [
+        {
+          "kinds": ["ips-exploit", "horizontal-scan", "vertical-scan", "ips-scan"],
+          "cves": ["CVE-2026-88771", "CVE-2026-88772"],
+          "technique": "T1190",
+          "why": "NetScaler ADC and Gateway zero days exploited before disclosure, with widespread scanning after it"
+        },
+        {
+          "kinds": ["horizontal-scan", "vertical-scan", "ips-scan"],
+          "external_only": true,
+          "products": ["NetScaler", "Citrix ADC", "Citrix Gateway"],
+          "technique": "T1595.002",
+          "why": "version fingerprinting of NetScaler ADC and Gateway preceded exploitation"
+        }
+      ],
+      "source_ips": ["104.248.244.66", "77.83.199.39", "78.47.24.217", "139.180.152.138",
+                     "66.135.19.18", "167.99.111.203", "142.93.85.227", "104.248.74.206", "137.184.91.207",
+                     "162.33.178.9", "193.149.176.207", "45.61.136.143", "66.227.183.84", "216.245.184.164"]
+    },
+    {
+      "id": "unit42-pan-os-cve-2026-0257",
+      "title": "Threat Brief: Active Exploitation of PAN-OS CVE-2026-0257",
+      "publisher": "Palo Alto Networks Unit 42",
+      "published": "2026-06-09",
+      "url": "https://unit42.paloaltonetworks.com/active-exploitation-of-pan-os-cve-2026-0257/",
+      "actors": ["unattributed"],
+      "techniques": ["T1190", "T1133"],
+      "rules": [
+        {
+          "kinds": ["ips-exploit", "horizontal-scan", "vertical-scan", "ips-scan"],
+          "cves": ["CVE-2026-0257"],
+          "technique": "T1190",
+          "why": "authentication bypass in the GlobalProtect portal and gateway, exploited after a public proof of concept"
+        }
+      ],
+      "source_ips": ["23.128.228.6", "104.207.144.154", "146.19.216.119", "146.19.216.120", "146.19.216.125",
+                     "179.43.172.213", "185.195.232.139", "198.12.106.60", "202.144.192.47"]
+    }
+  ]
+}
